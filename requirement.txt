@@ -1,3 +1,4 @@
 streamlit
 nbformat
 google-generativeai
+google-genai
