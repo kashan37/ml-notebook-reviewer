@@ -5,7 +5,6 @@ from google import genai
 client = genai.Client()
 
 def get_notebook_stats(notebook):
-
     total_cells = len(notebook.cells)
 
     code_cells = sum(1 for c in notebook.cells if c.cell_type == "code")
@@ -25,34 +24,60 @@ def get_file_size(uploaded_file):
 
 
 
+def extract_markdown(cell):
+    if cell.cell_type == "markdown":
+        return f"[MARKDOWN]\n{cell.source}\n"
+
+    return ""
+
+
+def extract_code(cell):
+    if cell.cell_type == "code":
+        return f"[CODE]\n{cell.source}\n"
+
+    return ""
+
+
+def extract_outputs(cell):
+    output_sections = []
+
+    if cell.cell_type == "code" and hasattr(cell, "outputs") and cell.outputs:
+        output_sections.append("[OUTPUT]")
+
+        for output in cell.outputs:
+            if output.get("output_type") == "stream":
+                output_sections.append(output.get("text", ""))
+
+            elif output.get("output_type") in ["execute_result", "display_data"]:
+                data = output.get("data", {})
+
+                if "text/plain" in data:
+                    output_sections.append(data["text/plain"])
+
+            elif output.get("output_type") == "error":
+                output_sections.append("ERROR:")
+                output_sections.append(output.get("ename", ""))
+                output_sections.append(output.get("evalue", ""))
+
+    return "\n".join(output_sections)
+
+
 def load_notebook(notebook):
     sections = []
 
     for cell in notebook.cells:
-        if cell.cell_type == "markdown":
-            sections.append("[MARKDOWN]")
-            sections.append(cell.source)
+        markdown = extract_markdown(cell)
+        code = extract_code(cell)
+        outputs = extract_outputs(cell)
 
-        elif cell.cell_type == "code":
-            sections.append("[CODE]")
-            sections.append(cell.source)
+        if markdown:
+            sections.append(markdown)
 
-            if hasattr(cell, "outputs") and cell.outputs:
-                sections.append("[OUTPUT]")
+        if code:
+            sections.append(code)
 
-                for output in cell.outputs:
-                    if output.get("output_type") == "stream":
-                        sections.append(output.get("text", ""))
-
-                    elif output.get("output_type") in ["execute_result", "display_data"]:
-                        data = output.get("data", {})
-                        if "text/plain" in data:
-                            sections.append(data["text/plain"])
-
-                    elif output.get("output_type") == "error":
-                        sections.append("ERROR:")
-                        sections.append(output.get("ename", ""))
-                        sections.append(output.get("evalue", ""))
+        if outputs:
+            sections.append(outputs)
 
     return "\n".join(sections)
 
