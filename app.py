@@ -8,9 +8,16 @@ client = genai.Client()
 def load_notebook(uploaded_file):
     notebook = nbformat.read(uploaded_file, as_version=4)
     text = ""
+
     for cell in notebook.cells:
-        if cell.cell_type == "code":
+        if cell.cell_type == "markdown":
+            text += "[MARKDOWN CELL]\n"
             text += cell.source + "\n\n"
+            
+        elif cell.cell_type == "code":
+            text += "[CODE CELL]\n"
+            text += cell.source + "\n\n"
+
     return text
 
 
