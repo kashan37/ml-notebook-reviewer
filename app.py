@@ -4,40 +4,57 @@ from google import genai
 
 client = genai.Client()
 
+def get_notebook_stats(notebook):
 
-def load_notebook(uploaded_file):
-    notebook = nbformat.read(uploaded_file, as_version=4)
-    text = ""
+    total_cells = len(notebook.cells)
+
+    code_cells = sum(1 for c in notebook.cells if c.cell_type == "code")
+    markdown_cells = sum(1 for c in notebook.cells if c.cell_type == "markdown")
+
+    return {
+        "total_cells": total_cells,
+        "code_cells": code_cells,
+        "markdown_cells": markdown_cells
+    }
+
+def get_file_size(uploaded_file):
+
+    size_kb = uploaded_file.size / 1024
+    return round(size_kb, 2)
+
+
+
+
+def load_notebook(notebook):
+    sections = []
 
     for cell in notebook.cells:
         if cell.cell_type == "markdown":
-            text += "[MARKDOWN CELL]\n"
-            text += cell.source + "\n\n"
+            sections.append("[MARKDOWN]")
+            sections.append(cell.source)
 
         elif cell.cell_type == "code":
-            text += "[CODE CELL]\n"
-            text += cell.source + "\n\n"
+            sections.append("[CODE]")
+            sections.append(cell.source)
 
             if hasattr(cell, "outputs") and cell.outputs:
-                text += "[OUTPUT]\n"
+                sections.append("[OUTPUT]")
 
                 for output in cell.outputs:
                     if output.get("output_type") == "stream":
-                        text += output.get("text", "") + "\n"
+                        sections.append(output.get("text", ""))
 
                     elif output.get("output_type") in ["execute_result", "display_data"]:
                         data = output.get("data", {})
                         if "text/plain" in data:
-                            text += data["text/plain"] + "\n"
+                            sections.append(data["text/plain"])
 
                     elif output.get("output_type") == "error":
-                        text += "ERROR:\n"
-                        text += output.get("ename", "") + "\n"
-                        text += output.get("evalue", "") + "\n"
+                        sections.append("ERROR:")
+                        sections.append(output.get("ename", ""))
+                        sections.append(output.get("evalue", ""))
 
-            text += "\n"
-
-    return text
+    return "\n".join(sections)
 
 
 
@@ -65,23 +82,64 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    st.success("Upload successful. Time to judge your ML decisions.")
-    st.write(uploaded_file.name)
+    notebook = nbformat.read(uploaded_file, as_version=4)
+    stats = get_notebook_stats(notebook)
+    size = get_file_size(uploaded_file)
+    notebook_text = load_notebook(notebook)
+
+    st.success("Upload successful. Ready for analysis.")
+
+    # FILE INFO CARD
+    st.markdown("### File Information")
 
     st.markdown(f"""
-### 📁 File Info
+    <div style="
+    background-color: #1e1e1e;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    color: #e6e6e6;
+    font-size: 15px;
+    line-height: 1.6;
+    ">
 
-📄 **Notebook:** {uploaded_file.name}  
-📦 **Type:** Jupyter / Colab Notebook (.ipynb)  
-📏 **Size:** {round(uploaded_file.size / 1024, 2)} KB  
-""")
-    
+    <b>Notebook Name:</b> {uploaded_file.name}<br>
+    <b>File Type:</b> Jupyter / Colab Notebook (.ipynb)<br>
+    <b>File Size:</b> {size} KB
 
-    notebook_text = load_notebook(uploaded_file)
+    </div>
+    """, unsafe_allow_html=True)
+
+    # NOTEBOOK CONTENT
+    st.markdown("### Notebook Preview")
+
     st.text_area(
-        "Notebook Content",
+        "Content",
         notebook_text[:100000],
-        height=400)
+        height=400
+    )
+
+    # STATS SECTION
+    st.markdown("### Notebook Statistics")
+
+    st.markdown(f"""
+    <div style="
+    background-color: #1e1e1e;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    color: #e6e6e6;
+    font-size: 15px;
+    line-height: 1.6;
+    ">
+
+    <b>Total Cells:</b> {stats['total_cells']}<br>
+    <b>Code Cells:</b> {stats['code_cells']}<br>
+    <b>Markdown Cells:</b> {stats['markdown_cells']}<br>
+    <b>File Size:</b> {size} KB
+
+    </div>
+    """, unsafe_allow_html=True)
 
     if st.button("Analyze Notebook"):
         prompt = f"""
@@ -98,6 +156,8 @@ Your job is to:
 - If something is unclear or missing, explicitly say: "Not enough information"
 
 Do NOT hallucinate missing components.
+Only rewrite or improve code inside the "Mistakes & Bad Practices" and "Improvements" sections if applicable.
+Do NOT generate corrected code in any other section.
 
 Return your response in this STRICT format:
 
@@ -145,7 +205,7 @@ Give a short friendly verdict:
         Notebook: {notebook_text} """
 
 
-        with st.spinner("Analyzing notebook... this may take a few seconds 🤖"):
+        with st.spinner("Analyzing notebook... this may take a few seconds"):
 
             response = client.models.generate_content( model="gemini-2.5-flash",
                                                       contents=prompt)
