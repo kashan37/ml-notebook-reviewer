@@ -13,12 +13,32 @@ def load_notebook(uploaded_file):
         if cell.cell_type == "markdown":
             text += "[MARKDOWN CELL]\n"
             text += cell.source + "\n\n"
-            
+
         elif cell.cell_type == "code":
             text += "[CODE CELL]\n"
             text += cell.source + "\n\n"
 
+            if hasattr(cell, "outputs") and cell.outputs:
+                text += "[OUTPUT]\n"
+
+                for output in cell.outputs:
+                    if output.get("output_type") == "stream":
+                        text += output.get("text", "") + "\n"
+
+                    elif output.get("output_type") in ["execute_result", "display_data"]:
+                        data = output.get("data", {})
+                        if "text/plain" in data:
+                            text += data["text/plain"] + "\n"
+
+                    elif output.get("output_type") == "error":
+                        text += "ERROR:\n"
+                        text += output.get("ename", "") + "\n"
+                        text += output.get("evalue", "") + "\n"
+
+            text += "\n"
+
     return text
+
 
 
 
