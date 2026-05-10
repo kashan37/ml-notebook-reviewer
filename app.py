@@ -142,6 +142,8 @@ if uploaded_file is not None:
     """, unsafe_allow_html=True)
 
     if st.button("Analyze Notebook"):
+        MAX_CHARS = 80000
+        safe_notebook_text = notebook_text[:MAX_CHARS]
         prompt = f"""
         You are a senior ML engineer reviewing a Jupyter notebook for a junior data scientist.
 
@@ -202,7 +204,7 @@ Give a short friendly verdict:
 - biggest thing to fix next
 - readiness level: Beginner / Improving / Solid / Portfolio-ready
 
-        Notebook: {notebook_text} """
+        Notebook: {safe_notebook_text} """
 
 
         with st.spinner("Analyzing notebook... this may take a few seconds"):
