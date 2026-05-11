@@ -119,10 +119,59 @@ uploaded_file = st.file_uploader(
 
 
 
+def count_keywords(text, keywords):
+    return sum(1 for keyword in keywords if keyword in text)
+
+
 def detect_notebook_type(notebook_text):
     text = notebook_text.lower()
 
     categories = {
+        "Feature Engineering": [
+            "feature engineering",
+            "onehotencoder",
+            "labelencoder",
+            "standardscaler",
+            "minmaxscaler",
+            "robustscaler",
+            "get_dummies",
+            "fillna",
+            "dropna",
+            "isnull",
+            "missing values",
+            "feature selection",
+            "selectkbest",
+            "mutual_info",
+            "pca",
+            "encoding",
+            "scaling",
+            "normalization"
+        ],
+        "Exploratory Data Analysis": [
+            "describe()",
+            "value_counts",
+            "corr()",
+            "sns.",
+            "plt.",
+            "hist",
+            "boxplot",
+            "heatmap",
+            "pairplot",
+            "eda"
+        ],
+        "Natural Language Processing": [
+            "tokenizer",
+            "bert",
+            "transformer",
+            "word2vec",
+            "tfidfvectorizer",
+            "countvectorizer",
+            "nltk",
+            "spacy",
+            "word_tokenize",
+            "stemming",
+            "lemmatization"
+        ],
         "Computer Vision": [
             "conv2d",
             "convolution",
@@ -132,75 +181,140 @@ def detect_notebook_type(notebook_text):
             "imagedatagenerator",
             "image_dataset_from_directory",
             "flow_from_directory",
-            "resize",
+            "grayscale",
             "rgb",
-            "grayscale"
+            "resize"
         ],
-        "Natural Language Processing": [
-            "bert",
-            "transformer",
-            "tokenizer",
-            "nlp",
-            "lstm",
-            "embedding",
-            "word2vec",
-            "tfidfvectorizer",
-            "countvectorizer"
-        ],
-        "Regression": [
-            "linearregression",
-            "mean_squared_error",
-            "mean_absolute_error",
-            "r2_score",
-            "regression",
-            "mae",
-            "mse",
-            "rmse",
-            "val_loss",
-            "loss"
-        ],
-        "Classification": [
-            "accuracy_score",
-            "classification_report",
-            "confusion_matrix",
-            "logisticregression",
-            "randomforestclassifier",
-            "svc",
-            "precision_score",
-            "recall_score",
-            "f1_score",
-            "categorical_crossentropy",
-            "binary_crossentropy"
-        ],
-        "Exploratory Data Analysis": [
-            "sns.",
-            "plt.",
-            "describe()",
-            "value_counts",
-            "isnull()",
-            "corr()"
+        "Time Series": [
+            "datetime",
+            "timestamp",
+            "resample",
+            "rolling",
+            "shift",
+            "arima",
+            "sarima",
+            "forecast",
+            "seasonality",
+            "trend"
         ]
     }
 
-    scores = {}
-    for category, keywords in categories.items():
-        scores[category] = sum(1 for keyword in keywords if keyword in text)
-    best_category = max(scores, key=scores.get)
-    if scores[best_category] == 0:
-        return "General Machine Learning"
+    scores = {
+        category: count_keywords(text, keywords)
+        for category, keywords in categories.items()
+    }
 
-    return best_category
+    if scores["Natural Language Processing"] >= 2:
+        return "Natural Language Processing"
+
+    if scores["Computer Vision"] >= 2:
+        return "Computer Vision"
+
+    if scores["Time Series"] >= 2:
+        return "Time Series"
+
+    if scores["Feature Engineering"] >= 3:
+        return "Feature Engineering"
+
+    if scores["Exploratory Data Analysis"] >= 3:
+        return "Exploratory Data Analysis"
+
+    if any(keyword in text for keyword in [
+        "sklearn",
+        "train_test_split",
+        ".fit(",
+        ".predict(",
+        "randomforest",
+        "xgboost",
+        "lightgbm"
+    ]):
+        return "Tabular ML / General ML"
+
+    return "General Notebook"
+
 
 
 
 
 if uploaded_file is not None:
 
+    def detect_ml_task(notebook_text):
+        text = notebook_text.lower()
+
+        classification_keywords = [
+            "classification_report",
+            "accuracy_score",
+            "precision_score",
+            "recall_score",
+            "f1_score",
+            "confusion_matrix",
+            "logisticregression",
+            "randomforestclassifier",
+            "svc",
+            "categorical_crossentropy",
+            "binary_crossentropy"
+        ]
+
+        regression_keywords = [
+            "mean_squared_error",
+            "mean_absolute_error",
+            "r2_score",
+            "linearregression",
+            "randomforestregressor",
+            "mae",
+            "mse",
+            "rmse"
+        ]
+
+        clustering_keywords = [
+            "kmeans",
+            "dbscan",
+            "agglomerativeclustering",
+            "silhouette_score",
+            "clustering"
+        ]
+
+        forecasting_keywords = [
+            "forecast",
+            "arima",
+            "sarima",
+            "prophet",
+            "seasonality",
+            "time series prediction"
+        ]
+
+        gan_keywords = [
+            "discriminator",
+            "adversarial",
+            "gan",
+            "generator loss",
+            "discriminator loss"
+        ]
+
+        scores = {
+            "Classification": count_keywords(text, classification_keywords),
+            "Regression": count_keywords(text, regression_keywords),
+            "Clustering": count_keywords(text, clustering_keywords),
+            "Forecasting": count_keywords(text, forecasting_keywords),
+            "GAN": count_keywords(text, gan_keywords)
+        }
+
+        best_task = max(scores, key=scores.get)
+
+        if scores[best_task] >= 2:
+            return best_task
+
+        return "No clear ML task detected"
+
+
+
+
     notebook = nbformat.read(uploaded_file, as_version=4)
     stats = get_notebook_stats(notebook)
     size = get_file_size(uploaded_file)
     notebook_text = load_notebook(notebook)
     notebook_type = detect_notebook_type(notebook_text)
+    ml_task = detect_ml_task(notebook_text)
 
     st.success("Upload successful. Ready for analysis.")
 
@@ -226,9 +340,15 @@ if uploaded_file is not None:
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
-### Detected Project Type
+### Detected Notebook Focus
 
 **{notebook_type}**
+""")
+    
+    st.markdown(f"""
+### ML Task Detected
+
+**{ml_task}**
 """)
 
     # NOTEBOOK CONTENT
@@ -239,6 +359,7 @@ if uploaded_file is not None:
         notebook_text[:100000],
         height=400
     )
+
 
     # STATS SECTION
     st.markdown("### Notebook Statistics")
@@ -314,7 +435,79 @@ if uploaded_file is not None:
     - feature understanding
     - missing value analysis
     """
+        
+    elif notebook_type == "Feature Engineering":
+        dynamic_instruction = """
+    Focus heavily on:
+    - missing value handling
+    - encoding choices
+    - feature scaling
+    - feature selection
+    - data leakage risks
+    - whether transformations are applied before or after train/test split
+    """
+        
+    elif notebook_type == "Tabular ML / General ML":
+        dynamic_instruction = """
+    Focus heavily on:
+    - data preprocessing
+    - train/test split
+    - feature handling
+    - model evaluation
+    - data leakage risks
+"""
+
+    elif ml_task == "No clear ML task detected":
+        task_instruction = """
+    No clear final ML task was detected.
+    Focus on whether the notebook is mainly exploratory, preprocessing-focused, or incomplete.
+    Do not pretend there is a classification or regression task unless the notebook clearly shows it.
+    """
     
+    
+    task_instruction = ""
+
+    if ml_task == "Classification":
+        task_instruction = """
+Additional ML task focus:
+- precision / recall
+- confusion matrix
+- class imbalance
+- F1-score
+"""
+
+    elif ml_task == "Regression":
+        task_instruction = """
+Additional ML task focus:
+- MAE / RMSE / R2
+- residual analysis
+- prediction error distribution
+"""
+
+    elif ml_task == "GAN":
+        task_instruction = """
+Additional ML task focus:
+- generator vs discriminator balance
+- mode collapse
+- training stability
+"""
+
+    elif ml_task == "NLP":
+        task_instruction = """
+Additional ML task focus:
+- tokenization quality
+- embeddings
+- sequence handling
+"""
+
+    elif ml_task == "Computer Vision":
+        task_instruction = """
+Additional ML task focus:
+- augmentation
+- CNN structure
+- overfitting in images
+"""
+
 
     if st.button("Analyze Notebook"):
         MAX_CHARS = 80000
@@ -334,6 +527,7 @@ Your job is to:
 
 Do NOT hallucinate missing components.
 {dynamic_instruction}
+{task_instruction}
 Only rewrite or improve code inside the "Mistakes & Bad Practices" and "Improvements" sections if applicable.
 Do NOT generate corrected code in any other section.
 
