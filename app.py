@@ -123,10 +123,80 @@ def count_keywords(text, keywords):
     return sum(1 for keyword in keywords if keyword in text)
 
 
-def detect_notebook_type(notebook_text):
+def detect_notebook_focus(notebook_text):
     text = notebook_text.lower()
 
     categories = {
+        "Diffusion Model": [
+            "stable diffusion",
+            "diffusionpipeline",
+            "stablediffusionpipeline",
+            "diffusers",
+            "noise_scheduler",
+            "denoising",
+            "ddpm",
+            "ddim",
+            "unet2dconditionmodel",
+            "latent diffusion"
+        ],
+        "Transformer / LLM": [
+            "transformers",
+            "autotokenizer",
+            "automodelforcausallm",
+            "automodelforsequenceclassification",
+            "bert",
+            "gpt",
+            "llama",
+            "mistral",
+            "gemma",
+            "t5",
+            "attention",
+            "self-attention",
+            "llm",
+            "lora",
+            "qlora",
+            "peft"
+        ],
+        "Autoencoder": [
+            "autoencoder",
+            "variational autoencoder",
+            "reconstruction_loss",
+            "reconstruction loss",
+            "latent_dim",
+            "bottleneck"
+        ],
+        "GAN": [
+            "gan",
+            "generator",
+            "discriminator",
+            "adversarial",
+            "generator loss",
+            "discriminator loss"
+        ],
+        "Computer Vision": [
+            "conv2d",
+            "convolution",
+            "cnn",
+            "opencv",
+            "cv2",
+            "imagedatagenerator",
+            "image_dataset_from_directory",
+            "flow_from_directory",
+            "resnet",
+            "efficientnet",
+            "mobilenet"
+        ],
+        "NLP": [
+            "tokenizer",
+            "tfidfvectorizer",
+            "countvectorizer",
+            "nltk",
+            "spacy",
+            "word_tokenize",
+            "stemming",
+            "lemmatization",
+            "embedding"
+        ],
         "Feature Engineering": [
             "feature engineering",
             "onehotencoder",
@@ -159,32 +229,6 @@ def detect_notebook_type(notebook_text):
             "pairplot",
             "eda"
         ],
-        "Natural Language Processing": [
-            "tokenizer",
-            "bert",
-            "transformer",
-            "word2vec",
-            "tfidfvectorizer",
-            "countvectorizer",
-            "nltk",
-            "spacy",
-            "word_tokenize",
-            "stemming",
-            "lemmatization"
-        ],
-        "Computer Vision": [
-            "conv2d",
-            "convolution",
-            "cnn",
-            "opencv",
-            "cv2",
-            "imagedatagenerator",
-            "image_dataset_from_directory",
-            "flow_from_directory",
-            "grayscale",
-            "rgb",
-            "resize"
-        ],
         "Time Series": [
             "datetime",
             "timestamp",
@@ -196,7 +240,51 @@ def detect_notebook_type(notebook_text):
             "forecast",
             "seasonality",
             "trend"
+        ],
+        "Classification": [
+            "classification_report",
+            "accuracy_score",
+            "precision_score",
+            "recall_score",
+            "f1_score",
+            "confusion_matrix",
+            "logisticregression",
+            "randomforestclassifier",
+            "categorical_crossentropy",
+            "binary_crossentropy"
+        ],
+        "Regression": [
+            "mean_squared_error",
+            "mean_absolute_error",
+            "r2_score",
+            "linearregression",
+            "randomforestregressor",
+            "mae",
+            "mse",
+            "rmse"
+        ],
+        "Clustering": [
+            "kmeans",
+            "dbscan",
+            "agglomerativeclustering",
+            "silhouette_score",
+            "clustering"
         ]
+    }
+
+    minimum_scores = {
+        "Diffusion Model": 1,
+        "Transformer / LLM": 2,
+        "Autoencoder": 1,
+        "GAN": 2,
+        "Computer Vision": 2,
+        "NLP": 2,
+        "Feature Engineering": 3,
+        "Exploratory Data Analysis": 3,
+        "Time Series": 2,
+        "Classification": 2,
+        "Regression": 2,
+        "Clustering": 2
     }
 
     scores = {
@@ -204,31 +292,20 @@ def detect_notebook_type(notebook_text):
         for category, keywords in categories.items()
     }
 
-    if scores["Natural Language Processing"] >= 2:
-        return "Natural Language Processing"
+    best_category = max(scores, key=scores.get)
 
-    if scores["Computer Vision"] >= 2:
-        return "Computer Vision"
-
-    if scores["Time Series"] >= 2:
-        return "Time Series"
-
-    if scores["Feature Engineering"] >= 3:
-        return "Feature Engineering"
-
-    if scores["Exploratory Data Analysis"] >= 3:
-        return "Exploratory Data Analysis"
+    if scores[best_category] >= minimum_scores[best_category]:
+        return best_category
 
     if any(keyword in text for keyword in [
         "sklearn",
         "train_test_split",
         ".fit(",
         ".predict(",
-        "randomforest",
-        "xgboost",
-        "lightgbm"
+        "model.fit",
+        "model.predict"
     ]):
-        return "Tabular ML / General ML"
+        return "General ML / Data Science"
 
     return "General Notebook"
 
@@ -238,83 +315,12 @@ def detect_notebook_type(notebook_text):
 
 if uploaded_file is not None:
 
-    def detect_ml_task(notebook_text):
-        text = notebook_text.lower()
-
-        classification_keywords = [
-            "classification_report",
-            "accuracy_score",
-            "precision_score",
-            "recall_score",
-            "f1_score",
-            "confusion_matrix",
-            "logisticregression",
-            "randomforestclassifier",
-            "svc",
-            "categorical_crossentropy",
-            "binary_crossentropy"
-        ]
-
-        regression_keywords = [
-            "mean_squared_error",
-            "mean_absolute_error",
-            "r2_score",
-            "linearregression",
-            "randomforestregressor",
-            "mae",
-            "mse",
-            "rmse"
-        ]
-
-        clustering_keywords = [
-            "kmeans",
-            "dbscan",
-            "agglomerativeclustering",
-            "silhouette_score",
-            "clustering"
-        ]
-
-        forecasting_keywords = [
-            "forecast",
-            "arima",
-            "sarima",
-            "prophet",
-            "seasonality",
-            "time series prediction"
-        ]
-
-        gan_keywords = [
-            "discriminator",
-            "adversarial",
-            "gan",
-            "generator loss",
-            "discriminator loss"
-        ]
-
-        scores = {
-            "Classification": count_keywords(text, classification_keywords),
-            "Regression": count_keywords(text, regression_keywords),
-            "Clustering": count_keywords(text, clustering_keywords),
-            "Forecasting": count_keywords(text, forecasting_keywords),
-            "GAN": count_keywords(text, gan_keywords)
-        }
-
-        best_task = max(scores, key=scores.get)
-
-        if scores[best_task] >= 2:
-            return best_task
-
-        return "No clear ML task detected"
-
-
-
-
     notebook = nbformat.read(uploaded_file, as_version=4)
     stats = get_notebook_stats(notebook)
     size = get_file_size(uploaded_file)
+
     notebook_text = load_notebook(notebook)
-    notebook_type = detect_notebook_type(notebook_text)
-    ml_task = detect_ml_task(notebook_text)
+    notebook_focus = detect_notebook_focus(notebook_text)
 
     st.success("Upload successful. Ready for analysis.")
 
@@ -342,14 +348,9 @@ if uploaded_file is not None:
     st.markdown(f"""
 ### Detected Notebook Focus
 
-**{notebook_type}**
+**{notebook_focus}**
 """)
-    
-    st.markdown(f"""
-### ML Task Detected
 
-**{ml_task}**
-""")
 
     # NOTEBOOK CONTENT
     st.markdown("### Notebook Preview")
@@ -384,139 +385,126 @@ if uploaded_file is not None:
     """, unsafe_allow_html=True)
 
 
-    dynamic_instruction = ""
-    
-    if notebook_type == "Computer Vision":
-        dynamic_instruction = """
-    Focus heavily on:
-    - image preprocessing
-    - augmentation
-    - CNN architecture
-    - overfitting risks
-    - validation accuracy
-    """
-
-    elif notebook_type == "Natural Language Processing":
-            dynamic_instruction = """
-        Focus heavily on:
-        - tokenization
-        - embeddings
-        - sequence handling
-        - NLP preprocessing
-        - transformer usage
-        """
-
-    elif notebook_type == "Regression":
-        dynamic_instruction = """
-    Focus heavily on:
-    - regression metrics
-    - feature scaling
-    - residual issues
-    - overfitting
-    - regression assumptions
-    """
-
-    elif notebook_type == "Classification":
-        dynamic_instruction = """
-    Focus heavily on:
-    - class imbalance
-    - evaluation metrics
-    - confusion matrix
-    - precision/recall
-    - classification performance
-    """
-
-    elif notebook_type == "Exploratory Data Analysis":
-        dynamic_instruction = """
-    Focus heavily on:
-    - visualization quality
-    - data cleaning
-    - statistical insights
-    - feature understanding
-    - missing value analysis
-    """
-        
-    elif notebook_type == "Feature Engineering":
-        dynamic_instruction = """
-    Focus heavily on:
-    - missing value handling
-    - encoding choices
-    - feature scaling
-    - feature selection
-    - data leakage risks
-    - whether transformations are applied before or after train/test split
-    """
-        
-    elif notebook_type == "Tabular ML / General ML":
-        dynamic_instruction = """
-    Focus heavily on:
-    - data preprocessing
-    - train/test split
-    - feature handling
-    - model evaluation
-    - data leakage risks
-"""
-
-    elif ml_task == "No clear ML task detected":
-        task_instruction = """
-    No clear final ML task was detected.
-    Focus on whether the notebook is mainly exploratory, preprocessing-focused, or incomplete.
-    Do not pretend there is a classification or regression task unless the notebook clearly shows it.
-    """
-    
-    
-    task_instruction = ""
-
-    if ml_task == "Classification":
-        task_instruction = """
-Additional ML task focus:
-- precision / recall
-- confusion matrix
-- class imbalance
-- F1-score
-"""
-
-    elif ml_task == "Regression":
-        task_instruction = """
-Additional ML task focus:
-- MAE / RMSE / R2
-- residual analysis
-- prediction error distribution
-"""
-
-    elif ml_task == "GAN":
-        task_instruction = """
-Additional ML task focus:
-- generator vs discriminator balance
-- mode collapse
+    focus_instructions = {
+    "Diffusion Model": """
+Focus heavily on:
+- diffusion pipeline usage
+- prompt quality
+- scheduler choice
+- denoising steps
+- generated output quality
+- fine-tuning risks if present
+""",
+    "Transformer / LLM": """
+Focus heavily on:
+- tokenizer usage
+- model loading
+- prompt design
+- fine-tuning setup if present
+- evaluation quality
+- hallucination or output validation risks
+""",
+    "Autoencoder": """
+Focus heavily on:
+- encoder/decoder architecture
+- latent space design
+- reconstruction loss
+- bottleneck size
+- anomaly detection or compression goal
+""",
+    "GAN": """
+Focus heavily on:
+- generator and discriminator balance
 - training stability
-"""
-
-    elif ml_task == "NLP":
-        task_instruction = """
-Additional ML task focus:
-- tokenization quality
+- mode collapse
+- generated sample quality
+""",
+    "Computer Vision": """
+Focus heavily on:
+- image preprocessing
+- augmentation
+- CNN architecture
+- overfitting risks
+- validation accuracy
+""",
+    "NLP": """
+Focus heavily on:
+- text preprocessing
+- tokenization
 - embeddings
 - sequence handling
+- evaluation metrics
+""",
+    "Feature Engineering": """
+Focus heavily on:
+- missing value handling
+- encoding choices
+- feature scaling
+- feature selection
+- data leakage risks
+- whether transformations happen before or after train/test split
+""",
+    "Exploratory Data Analysis": """
+Focus heavily on:
+- visualization quality
+- data cleaning
+- statistical insights
+- feature understanding
+- missing value analysis
+""",
+    "Time Series": """
+Focus heavily on:
+- date/time handling
+- trend and seasonality
+- leakage from future data
+- rolling features
+- forecasting validation
+""",
+    "Classification": """
+Focus heavily on:
+- class imbalance
+- evaluation metrics
+- confusion matrix
+- precision and recall
+- classification performance
+""",
+    "Regression": """
+Focus heavily on:
+- regression metrics
+- feature scaling
+- residual issues
+- overfitting
+- regression assumptions
+""",
+    "Clustering": """
+Focus heavily on:
+- clustering method choice
+- feature scaling
+- cluster evaluation
+- silhouette score or similar metrics
+- interpretability of clusters
 """
+}
 
-    elif ml_task == "Computer Vision":
-        task_instruction = """
-Additional ML task focus:
-- augmentation
-- CNN structure
-- overfitting in images
-"""
-
+    dynamic_instruction = focus_instructions.get(notebook_focus, """
+    Focus heavily on:
+    - notebook structure
+    - data cleaning
+    - preprocessing quality
+    - modeling choices
+    - evaluation quality
+    - missing or unclear project goal
+    """)
 
     if st.button("Analyze Notebook"):
         MAX_CHARS = 80000
         safe_notebook_text = notebook_text[:MAX_CHARS]
-        prompt = f"""
-        You are a senior ML engineer reviewing a Jupyter notebook for a junior data scientist.
 
-Your goal is to give a helpful, friedly, practical review that is easy to read.
-Be honest about problems, Always Roast a little bit and dont be boring.
+        prompt = f"""
+You are a senior ML engineer reviewing a Jupyter notebook for a junior data scientist.
+
+Your goal is to give a helpful, friendly, practical review that is easy to read.
+Be honest about problems, always roast a little bit and don't be boring.
 Avoid generic advice. Tie every point to something visible in the notebook when possible.
 
 Your job is to:
@@ -527,7 +515,6 @@ Your job is to:
 
 Do NOT hallucinate missing components.
 {dynamic_instruction}
-{task_instruction}
 Only rewrite or improve code inside the "Mistakes & Bad Practices" and "Improvements" sections if applicable.
 Do NOT generate corrected code in any other section.
 
@@ -574,13 +561,15 @@ Give a short friendly verdict:
 - biggest thing to fix next
 - readiness level: Beginner / Improving / Solid / Portfolio-ready
 
-        Notebook: {safe_notebook_text} """
-
+Notebook: {safe_notebook_text}
+"""
 
         with st.spinner("Analyzing notebook... this may take a few seconds"):
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
 
-            response = client.models.generate_content( model="gemini-2.5-flash",
-                                                      contents=prompt)
             output = response.text
             st.success("Analysis complete")
             st.markdown("---")
