@@ -93,9 +93,22 @@ font-weight: 600;
 border-left: 5px solid #4facfe;
 padding-left: 12px;
 ">
-ML Notebook Reviewer
+Notebook Lens
 </h1>
 """, unsafe_allow_html=True)
+
+st.markdown("""
+<p style="
+color: #b8b8b8;
+font-size: 18px;
+margin-top: -10px;
+margin-left: 17px;
+">
+AI-powered reviews for Jupyter and Colab ML notebooks.
+</p>
+""", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -105,12 +118,89 @@ uploaded_file = st.file_uploader(
     )
 
 
+
+def detect_notebook_type(notebook_text):
+    text = notebook_text.lower()
+
+    categories = {
+        "Computer Vision": [
+            "conv2d",
+            "convolution",
+            "cnn",
+            "opencv",
+            "cv2",
+            "imagedatagenerator",
+            "image_dataset_from_directory",
+            "flow_from_directory",
+            "resize",
+            "rgb",
+            "grayscale"
+        ],
+        "Natural Language Processing": [
+            "bert",
+            "transformer",
+            "tokenizer",
+            "nlp",
+            "lstm",
+            "embedding",
+            "word2vec",
+            "tfidfvectorizer",
+            "countvectorizer"
+        ],
+        "Regression": [
+            "linearregression",
+            "mean_squared_error",
+            "mean_absolute_error",
+            "r2_score",
+            "regression",
+            "mae",
+            "mse",
+            "rmse",
+            "val_loss",
+            "loss"
+        ],
+        "Classification": [
+            "accuracy_score",
+            "classification_report",
+            "confusion_matrix",
+            "logisticregression",
+            "randomforestclassifier",
+            "svc",
+            "precision_score",
+            "recall_score",
+            "f1_score",
+            "categorical_crossentropy",
+            "binary_crossentropy"
+        ],
+        "Exploratory Data Analysis": [
+            "sns.",
+            "plt.",
+            "describe()",
+            "value_counts",
+            "isnull()",
+            "corr()"
+        ]
+    }
+
+    scores = {}
+    for category, keywords in categories.items():
+        scores[category] = sum(1 for keyword in keywords if keyword in text)
+    best_category = max(scores, key=scores.get)
+    if scores[best_category] == 0:
+        return "General Machine Learning"
+
+    return best_category
+
+
+
+
 if uploaded_file is not None:
 
     notebook = nbformat.read(uploaded_file, as_version=4)
     stats = get_notebook_stats(notebook)
     size = get_file_size(uploaded_file)
     notebook_text = load_notebook(notebook)
+    notebook_type = detect_notebook_type(notebook_text)
 
     st.success("Upload successful. Ready for analysis.")
 
@@ -134,6 +224,12 @@ if uploaded_file is not None:
 
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+### Detected Project Type
+
+**{notebook_type}**
+""")
 
     # NOTEBOOK CONTENT
     st.markdown("### Notebook Preview")
@@ -166,6 +262,60 @@ if uploaded_file is not None:
     </div>
     """, unsafe_allow_html=True)
 
+
+    dynamic_instruction = ""
+    
+    if notebook_type == "Computer Vision":
+        dynamic_instruction = """
+    Focus heavily on:
+    - image preprocessing
+    - augmentation
+    - CNN architecture
+    - overfitting risks
+    - validation accuracy
+    """
+
+    elif notebook_type == "Natural Language Processing":
+            dynamic_instruction = """
+        Focus heavily on:
+        - tokenization
+        - embeddings
+        - sequence handling
+        - NLP preprocessing
+        - transformer usage
+        """
+
+    elif notebook_type == "Regression":
+        dynamic_instruction = """
+    Focus heavily on:
+    - regression metrics
+    - feature scaling
+    - residual issues
+    - overfitting
+    - regression assumptions
+    """
+
+    elif notebook_type == "Classification":
+        dynamic_instruction = """
+    Focus heavily on:
+    - class imbalance
+    - evaluation metrics
+    - confusion matrix
+    - precision/recall
+    - classification performance
+    """
+
+    elif notebook_type == "Exploratory Data Analysis":
+        dynamic_instruction = """
+    Focus heavily on:
+    - visualization quality
+    - data cleaning
+    - statistical insights
+    - feature understanding
+    - missing value analysis
+    """
+    
+
     if st.button("Analyze Notebook"):
         MAX_CHARS = 80000
         safe_notebook_text = notebook_text[:MAX_CHARS]
@@ -183,6 +333,7 @@ Your job is to:
 - If something is unclear or missing, explicitly say: "Not enough information"
 
 Do NOT hallucinate missing components.
+{dynamic_instruction}
 Only rewrite or improve code inside the "Mistakes & Bad Practices" and "Improvements" sections if applicable.
 Do NOT generate corrected code in any other section.
 
