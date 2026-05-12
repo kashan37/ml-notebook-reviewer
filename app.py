@@ -310,6 +310,57 @@ def detect_notebook_focus(notebook_text):
     return "General Notebook"
 
 
+def detect_reproducibility_signals(notebook_text):
+    text = notebook_text.lower()
+    signals = {
+        "Random seeds": any(keyword in text for keyword in [
+            "random_state",
+            "np.random.seed",
+            "random.seed",
+            "torch.manual_seed",
+            "tf.random.set_seed",
+            "seed="
+        ]),
+        "Train/test split": any(keyword in text for keyword in [
+            "train_test_split",
+            "validation_split",
+            "stratifiedkfold",
+            "kfold",
+            "cross_val_score",
+            "train_df",
+            "test_df",
+            "x_train",
+            "x_test",
+            "y_train",
+            "y_test"
+        ]),
+        "Callbacks": any(keyword in text for keyword in [
+            "earlystopping",
+            "modelcheckpoint",
+            "reducelronplateau",
+            "tensorboard",
+            "callbacks"
+        ]),
+        "Logging / experiment tracking": any(keyword in text for keyword in [
+            "mlflow",
+            "wandb",
+            "tensorboard",
+            "comet",
+            "neptune",
+            "history.history",
+            "training log",
+            "logs"
+        ])
+    }
+
+    result = ["Reproducibility signals detected in the notebook:"]
+
+    for name, found in signals.items():
+        status = "Found" if found else "Not found"
+        result.append(f"- {name}: {status}")
+
+    return "\n".join(result)
+
 
 
 
@@ -321,6 +372,7 @@ if uploaded_file is not None:
 
     notebook_text = load_notebook(notebook)
     notebook_focus = detect_notebook_focus(notebook_text)
+    reproducibility_context = detect_reproducibility_signals(notebook_text)
 
     st.success("Upload successful. Ready for analysis.")
 
@@ -521,17 +573,24 @@ Your job is to:
 Do NOT hallucinate missing components.
 If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
 {dynamic_instruction}
+{reproducibility_context}
+Use the reproducibility signals above to guide your review, but do not overstate them.
+If a signal is marked "Not found", mention it only where relevant and say the notebook does not provide enough evidence.
 Only include rewritten or improved code when it directly helps explain a problem or improvement.
 Place code examples only inside the "Mistakes & Bad Practices" or "Improvements" sections.
 Do NOT generate corrected code in any other section.
 Do NOT rewrite large parts of the notebook unless the notebook evidence clearly supports it.
-
 
 Return your response in this STRICT format:
 
 ### Project Summary
 Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
 If the goal is unclear, say "Not enough information."
+
+### Evidence Found
+List the most important concrete evidence found in the notebook.
+Mention relevant libraries, functions, models, preprocessing steps, metrics, outputs, or notebook patterns.
+Do not invent evidence.
 
 ### What Looks Good
 Mention 2-4 things the notebook does well.
@@ -558,6 +617,19 @@ If any area is not shown in the notebook, say "Not enough information."
 Review model choice, training approach, evaluation metrics, validation strategy, and whether the chosen metric fits the problem.
 Reference actual models, metrics, callbacks, losses, logs, or evaluation outputs detected in the notebook.
 If no model or training process is visible, say "Not enough information."
+
+### Reproducibility Review
+Review whether the notebook is reproducible and easy to verify.
+Comment on:
+- random seeds
+- train/test split or validation setup
+- callbacks such as EarlyStopping, ModelCheckpoint, or learning-rate scheduling
+- logging or experiment tracking
+- whether results can be rerun reliably
+
+Use only notebook evidence.
+If any item is missing or unclear, say "Not enough information."
+
 
 ### Overfitting / Underfitting Analysis
 Explain any signs or risks of overfitting or underfitting.
