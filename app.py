@@ -549,7 +549,7 @@ Focus heavily on:
     """)
 
     if st.button("Analyze Notebook"):
-        MAX_CHARS = 80000
+        MAX_CHARS = 60000
         safe_notebook_text = notebook_text[:MAX_CHARS]
 
         prompt = f"""
