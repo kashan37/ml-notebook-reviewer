@@ -488,12 +488,12 @@ Focus heavily on:
 
     dynamic_instruction = focus_instructions.get(notebook_focus, """
     Focus heavily on:
-    - notebook structure
-    - data cleaning
-    - preprocessing quality
-    - modeling choices
-    - evaluation quality
-    - missing or unclear project goal
+     - notebook objective and whether the goal is clearly defined
+     - data quality, missing values, and preprocessing logic
+     - feature handling and possible data leakage
+     - modeling choices and whether they match the task
+     - evaluation reliability, metrics, validation strategy, and reproducibility
+     - clarity of conclusions and limitations
     """)
 
     if st.button("Analyze Notebook"):
@@ -501,7 +501,7 @@ Focus heavily on:
         safe_notebook_text = notebook_text[:MAX_CHARS]
 
         prompt = f"""
-You are a senior ML engineer reviewing a Jupyter notebook for a junior data scientist.
+You are a senior Machine learning engineer and technical reviewer evaluating a Jupyter notebook..
 
 Your goal is to give a helpful, friendly, practical review that is easy to read.
 Be honest about problems, always roast a little bit and don't be boring.
@@ -512,53 +512,83 @@ Your job is to:
 - Avoid vague advice
 - Only comment based on evidence in the notebook
 - If something is unclear or missing, explicitly say: "Not enough information"
+- Reference specific notebook evidence whenever possible
+- Mention specific functions, models, preprocessing steps, metrics, libraries, or outputs seen in the notebook
+- Quote short relevant snippets or behaviors from the notebook when useful
+- Do not make generic ML comments unless supported by notebook evidence
+
 
 Do NOT hallucinate missing components.
+If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
 {dynamic_instruction}
-Only rewrite or improve code inside the "Mistakes & Bad Practices" and "Improvements" sections if applicable.
+Only include rewritten or improved code when it directly helps explain a problem or improvement.
+Place code examples only inside the "Mistakes & Bad Practices" or "Improvements" sections.
 Do NOT generate corrected code in any other section.
+Do NOT rewrite large parts of the notebook unless the notebook evidence clearly supports it.
+
 
 Return your response in this STRICT format:
 
 ### Project Summary
-Briefly explain what the notebook is trying to do, what ML task it appears to solve, and what the final output/model seems to be.
+Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
+If the goal is unclear, say "Not enough information."
 
 ### What Looks Good
-Mention 2-4 things the notebook does well, even if the project has issues.
+Mention 2-4 things the notebook does well.
+Tie each point to specific evidence from the notebook.
 
 ### Mistakes & Bad Practices
 List the main problems in the notebook.
-For each issue, explain:
-- what the problem is
-- why it matters
-- how to fix it
+For each issue, include:
+- Problem
+- Evidence from the notebook
+- Why it matters
+- How to fix it
+
+Only include issues that are supported by notebook evidence.
+If something is only a risk, label it as a risk, not a confirmed mistake.
+
 
 ### Data & Preprocessing Review
-Comment on missing values, encoding, scaling, feature selection, data leakage, train/test split, and whether preprocessing is done correctly.
+Review missing values, encoding, scaling, feature selection, data leakage, train/test split, and preprocessing quality.
+Reference actual preprocessing steps, functions, or code patterns found in the notebook.
+If any area is not shown in the notebook, say "Not enough information."
 
 ### Model & Training Review
 Review model choice, training approach, evaluation metrics, validation strategy, and whether the chosen metric fits the problem.
+Reference actual models, metrics, callbacks, losses, logs, or evaluation outputs detected in the notebook.
+If no model or training process is visible, say "Not enough information."
 
 ### Overfitting / Underfitting Analysis
 Explain any signs or risks of overfitting or underfitting.
 Suggest practical ways to reduce those risks.
+Use notebook evidence such as training logs, validation metrics, learning curves, or output behavior when making conclusions.
 
 ### Improvements
 Give clear, prioritized improvements.
+
 Label them as:
 - Quick wins
 - Medium improvements
 - Advanced improvements
 
-### Interview Questions
-Generate 5-7 interview questions based on this notebook.
-Make them specific to the project, not generic ML questions.
+For each improvement, explain:
+- what to change
+- why it improves the notebook
+- where it applies based on notebook evidence
+
+### Technical Review Questions
+Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
+Questions should test the author’s reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
+Each question must be tied to something visible in the notebook.
+Avoid generic ML questions.
 
 ### Final Verdict
 Give a short friendly verdict:
 - overall quality
 - biggest strength
 - biggest thing to fix next
+- reliability of the current results
 - readiness level: Beginner / Improving / Solid / Portfolio-ready
 
 Notebook: {safe_notebook_text}
