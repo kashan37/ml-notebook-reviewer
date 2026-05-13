@@ -572,6 +572,8 @@ Your job is to:
 
 Do NOT hallucinate missing components.
 If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
+Do not give high scores unless strong notebook evidence supports them.
+Avoid inflated scoring.
 {dynamic_instruction}
 {reproducibility_context}
 Use the reproducibility signals above to guide your review, but do not overstate them.
@@ -649,6 +651,26 @@ For each improvement, explain:
 - why it improves the notebook
 - where it applies based on notebook evidence
 
+
+### Notebook Scores
+Give scores from 1-10 for the following areas.
+
+For each score:
+- give the numeric score
+- briefly justify the score using notebook evidence
+
+Categories:
+- Code Quality
+- ML Rigor
+- Experimentation
+- Readability
+
+Scoring Guidelines:
+- 1-3 = weak
+- 4-6 = developing
+- 7-8 = strong
+- 9-10 = exceptional
+
 ### Technical Review Questions
 Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
 Questions should test the author’s reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
@@ -662,17 +684,23 @@ Give a short friendly verdict:
 - biggest thing to fix next
 - reliability of the current results
 - readiness level: Beginner / Improving / Solid / Portfolio-ready
+- Briefly summarize how the scores reflect the overall notebook quality and engineering maturity.
 
 Notebook: {safe_notebook_text}
 """
 
         with st.spinner("Analyzing notebook... this may take a few seconds"):
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
 
-            output = response.text
-            st.success("Analysis complete")
-            st.markdown("---")
-            st.markdown(output)
+                output = response.text
+                st.success("Analysis complete")
+                st.markdown("---")
+                st.markdown(output)
+            except Exception as e:
+                st.error("The analysis model could not complete the review. Please try again in a moment.")
+                st.caption("If this keeps happening, try a smaller notebook or clear very large output cells.")
+                st.session_state["last_error_type"] = type(e).__name__
