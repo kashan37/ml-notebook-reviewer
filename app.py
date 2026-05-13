@@ -1,9 +1,16 @@
 import streamlit as st
 import nbformat
 from google import genai
+# =========================
+# IMPORTS & SETUP
+# =========================
 
 client = genai.Client()
 
+
+# ===============================
+# CORE NOTEBOOK PARSING FUNCTIONS
+# ===============================
 def get_notebook_stats(notebook):
     total_cells = len(notebook.cells)
 
@@ -21,22 +28,17 @@ def get_file_size(uploaded_file):
     size_kb = uploaded_file.size / 1024
     return round(size_kb, 2)
 
-
-
-
 def extract_markdown(cell):
     if cell.cell_type == "markdown":
         return f"[MARKDOWN]\n{cell.source}\n"
 
     return ""
 
-
 def extract_code(cell):
     if cell.cell_type == "code":
         return f"[CODE]\n{cell.source}\n"
 
     return ""
-
 
 def extract_outputs(cell):
     output_sections = []
@@ -81,9 +83,6 @@ def load_notebook(notebook):
 
     return "\n".join(sections)
 
-
-
-
 # st.title("ML Notebook Reviewer")
 st.markdown("""
 <h1 style="
@@ -117,12 +116,13 @@ uploaded_file = st.file_uploader(
      type=["ipynb"]
     )
 
-
-
 def count_keywords(text, keywords):
     return sum(1 for keyword in keywords if keyword in text)
 
 
+# ==============================
+# NOTEBOOK TYPE + TASK DETECTION
+# ==============================
 def detect_notebook_focus(notebook_text):
     text = notebook_text.lower()
 
@@ -309,7 +309,20 @@ def detect_notebook_focus(notebook_text):
 
     return "General Notebook"
 
+def score_notebook(notebook_text):
+    # Placeholder for V2 scoring engine
+    scores = {
+        "Code Quality": None,
+        "ML Rigor": None,
+        "Experimentation": None,
+        "Readability": None
+    }
+    return scores
 
+
+# ==============================
+# REPRODUCIBILITY ANALYSIS
+# =============================
 def detect_reproducibility_signals(notebook_text):
     text = notebook_text.lower()
     signals = {
@@ -361,9 +374,21 @@ def detect_reproducibility_signals(notebook_text):
 
     return "\n".join(result)
 
+# =========================
+# GEMINI API CALL
+# =========================
+def call_gemini(prompt):
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    return response.text
 
 
 
+# ============================
+# STREAMLIT UI + APP LOGIC
+# ============================
 if uploaded_file is not None:
 
     notebook = nbformat.read(uploaded_file, as_version=4)
@@ -403,7 +428,6 @@ if uploaded_file is not None:
 **{notebook_focus}**
 """)
 
-
     # NOTEBOOK CONTENT
     st.markdown("### Notebook Preview")
 
@@ -412,7 +436,6 @@ if uploaded_file is not None:
         notebook_text[:100000],
         height=400
     )
-
 
     # STATS SECTION
     st.markdown("### Notebook Statistics")
@@ -435,7 +458,6 @@ if uploaded_file is not None:
 
     </div>
     """, unsafe_allow_html=True)
-
 
     focus_instructions = {
     "Diffusion Model": """
@@ -537,7 +559,6 @@ Focus heavily on:
 - interpretability of clusters
 """
 }
-
     dynamic_instruction = focus_instructions.get(notebook_focus, """
     Focus heavily on:
      - notebook objective and whether the goal is clearly defined
@@ -552,7 +573,12 @@ Focus heavily on:
         MAX_CHARS = 60000
         safe_notebook_text = notebook_text[:MAX_CHARS]
 
-        prompt = f"""
+        # =============================
+        # PROMPT BUILDER (GEMINI INPUT)
+        # =============================
+
+        def build_prompt(dynamic_instruction, reproducibility_context, safe_notebook_text):
+            prompt = f"""
 You are a senior Machine learning engineer and technical reviewer evaluating a Jupyter notebook..
 
 Your goal is to give a helpful, friendly, practical review that is easy to read.
@@ -572,6 +598,9 @@ Your job is to:
 
 Do NOT hallucinate missing components.
 If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
+Only suggest code that preserves data integrity assumptions.
+If dataset structure is unclear, first recommend validation or inspection steps before transformations.
+Do not assume ordering, pairing, or schema correctness unless explicitly shown in the notebook evidence.
 Do not give high scores unless strong notebook evidence supports them.
 Avoid inflated scoring.
 {dynamic_instruction}
@@ -687,16 +716,24 @@ Give a short friendly verdict:
 - Briefly summarize how the scores reflect the overall notebook quality and engineering maturity.
 
 Notebook: {safe_notebook_text}
-"""
+"""     
+            return prompt
 
         with st.spinner("Analyzing notebook... this may take a few seconds"):
             try:
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt
+                # =========================
+                # GEMINI API CALL
+                # =========================
+                # build prompt
+                prompt = build_prompt(
+                    dynamic_instruction,
+                    reproducibility_context,
+                    safe_notebook_text
                 )
 
-                output = response.text
+                # call gemini
+                output = call_gemini(prompt)
+
                 st.success("Analysis complete")
                 st.markdown("---")
                 st.markdown(output)
