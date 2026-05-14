@@ -10,7 +10,7 @@ import time
 # =========================
 
 client = genai.Client()
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 # ===============================
