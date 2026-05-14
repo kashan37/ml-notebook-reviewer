@@ -1,11 +1,16 @@
 import streamlit as st
 import nbformat
 from google import genai
+from google.genai import errors
+import re
+import html
+import time
 # =========================
 # IMPORTS & SETUP
 # =========================
 
 client = genai.Client()
+DEBUG_MODE = True
 
 
 # ===============================
@@ -48,18 +53,28 @@ def extract_outputs(cell):
 
         for output in cell.outputs:
             if output.get("output_type") == "stream":
-                output_sections.append(output.get("text", ""))
+                stream_text = output.get("text", "")
+
+                if isinstance(stream_text, list):
+                    stream_text = "\n".join(stream_text)
+
+                output_sections.append(str(stream_text))
 
             elif output.get("output_type") in ["execute_result", "display_data"]:
                 data = output.get("data", {})
 
                 if "text/plain" in data:
-                    output_sections.append(data["text/plain"])
+                    text_output = data["text/plain"]
+
+                    if isinstance(text_output, list):
+                        text_output = "\n".join(text_output)
+
+                    output_sections.append(str(text_output))
 
             elif output.get("output_type") == "error":
                 output_sections.append("ERROR:")
-                output_sections.append(output.get("ename", ""))
-                output_sections.append(output.get("evalue", ""))
+                output_sections.append(str(output.get("ename", "")))
+                output_sections.append(str(output.get("evalue", "")))
 
     return "\n".join(output_sections)
 
@@ -82,6 +97,79 @@ def load_notebook(notebook):
             sections.append(outputs)
 
     return "\n".join(sections)
+
+
+# =========================
+# UI STYLES
+# =========================
+st.markdown("""
+<style>
+.review-card {
+    background: linear-gradient(145deg, #151821, #0f1117);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 20px;
+    min-height: 145px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+}
+
+.review-card-label {
+    color: #7a7a7a;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.review-card-value {
+    color: #f5f5f7;
+    font-size: 24px;
+    font-weight: 650;
+    line-height: 1.2;
+    margin-bottom: 10px;
+}
+
+.review-card-detail {
+    color: #b8b8b8;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.review-card-accent {
+    color: #4facfe;
+}
+
+.info-card {
+    background: linear-gradient(145deg, #151821, #0f1117);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 18px 20px;
+    color: #f5f5f7;
+    font-size: 15px;
+    line-height: 1.7;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+}
+
+.info-card b {
+    color: #a1a1aa;
+    font-weight: 600;
+}
+            
+
+.dashboard-caption {
+    color: #9b9b9b;
+    font-size: 14px;
+    margin-top: -8px;
+    margin-bottom: 18px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # st.title("ML Notebook Reviewer")
 st.markdown("""
@@ -375,6 +463,14 @@ def detect_reproducibility_signals(notebook_text):
     return "\n".join(result)
 
 # =========================
+# LOADING UI HELPERS
+# =========================
+def update_loading_state(progress_bar, status_text, progress, message, delay=0.15):
+    progress_bar.progress(progress)
+    status_text.markdown(f"**{message}**")
+    time.sleep(delay)
+
+# =========================
 # GEMINI API CALL
 # =========================
 def call_gemini(prompt):
@@ -384,6 +480,156 @@ def call_gemini(prompt):
     )
     return response.text
 
+# =========================
+# REVIEW OUTPUT PARSING
+# =========================
+def extract_section(review_text, heading):
+    pattern = rf"### {re.escape(heading)}(.*?)(?=\n### |\Z)"
+    match = re.search(pattern, review_text, re.DOTALL)
+
+    if not match:
+        return ""
+
+    return f"### {heading}\n{match.group(1).strip()}"
+
+def extract_section_body(review_text, heading):
+    pattern = rf"### {re.escape(heading)}(.*?)(?=\n### |\Z)"
+    match = re.search(pattern, review_text, re.DOTALL)
+
+    if not match:
+        return ""
+
+    return match.group(1).strip()
+
+
+def combine_sections(review_text, headings): #NOT IN USE CURRENTLY
+    sections = []
+    for heading in headings:
+        section = extract_section(review_text, heading)
+        if section:
+            sections.append(section)
+    if not sections:
+        return "_No content found for this tab._"
+    return "\n\n".join(sections)
+
+def render_sections_as_expanders(review_text, headings, first_expanded=True):
+    matched_sections = []
+
+    for heading in headings:
+        pattern = rf"### {re.escape(heading)}(.*?)(?=\n### |\Z)"
+        match = re.search(pattern, review_text, re.DOTALL)
+
+        if match:
+            matched_sections.append({
+                "heading": heading,
+                "content": match.group(1).strip()
+            })
+
+    if not matched_sections:
+        st.info("No content found for this tab.")
+        return
+
+    for index, section in enumerate(matched_sections):
+        with st.expander(
+            section["heading"],
+            expanded=(first_expanded and index == 0)
+        ):
+            st.markdown(section["content"])
+
+
+# =========================
+# DASHBOARD CARD HELPERS
+# =========================
+def clean_preview_text(text, max_chars=260):
+    if not text:
+        return "No clear signal found yet."
+
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    text = re.sub(r"#+\s*", "", text)
+    text = re.sub(r"[*_`>]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    intro_patterns = [
+        r"^here are some prioritized improvements.*?:\s*",
+        r"^here are the prioritized improvements.*?:\s*",
+        r"^the following improvements.*?:\s*",
+        r"^below are some.*?:\s*",
+    ]
+
+    for pattern in intro_patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+
+    return text
+
+
+def render_review_card(label, value, detail):
+    safe_label = html.escape(str(label))
+    safe_value = html.escape(str(value))
+    safe_detail = html.escape(str(detail))
+
+    st.markdown(f"""
+    <div class="review-card">
+        <div class="review-card-label">{safe_label}</div>
+        <div class="review-card-value">{safe_value}</div>
+        <div class="review-card-detail">{safe_detail}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_review_dashboard(output, notebook_focus, stats, size):
+    mistakes_text = extract_section_body(output, "Mistakes & Bad Practices")
+    improvements_text = extract_section_body(output, "Improvements")
+    verdict_text = extract_section_body(output, "Final Verdict")
+
+    issue_preview = clean_preview_text(mistakes_text)
+    improvement_preview = clean_preview_text(improvements_text)
+    verdict_preview = clean_preview_text(verdict_text)
+
+    st.markdown("### Review Dashboard")
+    st.markdown(
+        '<div class="dashboard-caption">A quick executive snapshot before the detailed review.</div>',
+        unsafe_allow_html=True
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        render_review_card(
+            "Detected Focus",
+            notebook_focus,
+            "Primary ML/data task detected from notebook content."
+        )
+
+    with col2:
+        render_review_card(
+            "Notebook Shape",
+            f"{stats['total_cells']} cells",
+            f"{stats['code_cells']} code cells · {stats['markdown_cells']} markdown cells"
+        )
+
+    with col3:
+        render_review_card(
+            "Key Issue",
+            "Needs Review",
+            issue_preview
+        )
+
+    with col4:
+        render_review_card(
+            "Top Improvement",
+            "Next Step",
+            improvement_preview
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    render_review_card(
+        "Final Verdict Preview",
+        "Overall Take",
+        verdict_preview
+    )
 
 
 # ============================
@@ -405,22 +651,13 @@ if uploaded_file is not None:
     st.markdown("### File Information")
 
     st.markdown(f"""
-    <div style="
-    background-color: #1e1e1e;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #333;
-    color: #e6e6e6;
-    font-size: 15px;
-    line-height: 1.6;
-    ">
-
-    <b>Notebook Name:</b> {uploaded_file.name}<br>
-    <b>File Type:</b> Jupyter / Colab Notebook (.ipynb)<br>
-    <b>File Size:</b> {size} KB
-
+    <div class="info-card">
+        <b>Notebook Name:</b> {uploaded_file.name}<br>
+        <b>File Type:</b> Jupyter / Colab Notebook (.ipynb)<br>
+        <b>File Size:</b> {size} KB
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
 
     st.markdown(f"""
 ### Detected Notebook Focus
@@ -441,23 +678,14 @@ if uploaded_file is not None:
     st.markdown("### Notebook Statistics")
 
     st.markdown(f"""
-    <div style="
-    background-color: #1e1e1e;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #333;
-    color: #e6e6e6;
-    font-size: 15px;
-    line-height: 1.6;
-    ">
-
-    <b>Total Cells:</b> {stats['total_cells']}<br>
-    <b>Code Cells:</b> {stats['code_cells']}<br>
-    <b>Markdown Cells:</b> {stats['markdown_cells']}<br>
-    <b>File Size:</b> {size} KB
-
+    <div class="info-card">
+        <b>Total Cells:</b> {stats['total_cells']}<br>
+        <b>Code Cells:</b> {stats['code_cells']}<br>
+        <b>Markdown Cells:</b> {stats['markdown_cells']}<br>
+        <b>File Size:</b> {size} KB
     </div>
     """, unsafe_allow_html=True)
+
 
     focus_instructions = {
     "Diffusion Model": """
@@ -613,6 +841,7 @@ Do NOT generate corrected code in any other section.
 Do NOT rewrite large parts of the notebook unless the notebook evidence clearly supports it.
 
 Return your response in this STRICT format:
+Use the exact section headings shown below. Do not rename headings, because the app uses them to organize the review into tabs:
 
 ### Project Summary
 Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
@@ -700,7 +929,7 @@ Scoring Guidelines:
 - 7-8 = strong
 - 9-10 = exceptional
 
-### Technical Review Questions
+### Technical Questions
 Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
 Questions should test the author’s reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
 Each question must be tied to something visible in the notebook.
@@ -719,25 +948,139 @@ Notebook: {safe_notebook_text}
 """     
             return prompt
 
-        with st.spinner("Analyzing notebook... this may take a few seconds"):
-            try:
-                # =========================
-                # GEMINI API CALL
-                # =========================
-                # build prompt
-                prompt = build_prompt(
-                    dynamic_instruction,
-                    reproducibility_context,
-                    safe_notebook_text
-                )
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-                # call gemini
-                output = call_gemini(prompt)
+        try:
+            update_loading_state(
+                progress_bar,
+                status_text,
+                10,
+                "Reading notebook structure..."
+            )
 
-                st.success("Analysis complete")
-                st.markdown("---")
-                st.markdown(output)
-            except Exception as e:
-                st.error("The analysis model could not complete the review. Please try again in a moment.")
-                st.caption("If this keeps happening, try a smaller notebook or clear very large output cells.")
-                st.session_state["last_error_type"] = type(e).__name__
+            update_loading_state(
+                progress_bar,
+                status_text,
+                30,
+                "Preparing review criteria..."
+            )
+
+            # =========================
+            # GEMINI API CALL
+            # =========================
+            # build prompt
+            prompt = build_prompt(
+                dynamic_instruction,
+                reproducibility_context,
+                safe_notebook_text
+            )
+
+            update_loading_state(
+                progress_bar,
+                status_text,
+                65,
+                "Evaluating notebook quality..."
+            )
+
+            # call gemini
+            output = call_gemini(prompt)
+
+            update_loading_state(
+                progress_bar,
+                status_text,
+                85,
+                "Organizing review dashboard...",
+                delay = 0.6
+            )
+
+            update_loading_state(
+                progress_bar,
+                status_text,
+                100,
+                "Analysis complete.",
+                delay = 0.4
+
+            )
+
+            st.success("Analysis complete")
+            progress_bar.empty()
+            status_text.empty()
+            st.markdown("---")
+            
+            render_review_dashboard(output, notebook_focus, stats, size)
+
+            summary_tab, mistakes_tab, improvements_tab, questions_tab = st.tabs([
+                "Summary",
+                "Mistakes",
+                "Improvements",
+                "Technical Questions"
+            ])
+
+            with summary_tab:
+                render_sections_as_expanders(output, [
+                    "Project Summary",
+                    "Evidence Found",
+                    "What Looks Good",
+                    "Notebook Scores",
+                    "Final Verdict"
+                ])
+
+            with mistakes_tab:
+                render_sections_as_expanders(output, [
+                    "Mistakes & Bad Practices",
+                    "Data & Preprocessing Review",
+                    "Model & Training Review",
+                    "Reproducibility Review",
+                    "Overfitting / Underfitting Analysis"
+                ])
+
+            with improvements_tab:
+                render_sections_as_expanders(output, [
+                    "Improvements"
+                ])
+
+            with questions_tab:
+                render_sections_as_expanders(output, [
+                    "Technical Questions",
+                    "Technical Review Questions"
+                ])
+
+        except errors.ClientError as e:
+            progress_bar.empty()
+            status_text.empty()
+
+            error_text = str(e)
+
+            if "RESOURCE_EXHAUSTED" in error_text or "429" in error_text:
+                st.error("Gemini quota limit reached.")
+                st.caption("You hit the current request limit. Please wait and try again later.")
+            else:
+                st.error("The AI review service could not complete the request.")
+                st.caption("Please try again in a moment.")
+
+                if DEBUG_MODE:
+                    st.write("Error type:", type(e).__name__)
+                    st.exception(e)
+
+        except errors.ServerError as e:
+            progress_bar.empty()
+            status_text.empty()
+
+            st.error("The AI review service is temporarily busy.")
+            st.caption("The model is experiencing high demand. Please wait a moment and try again.")
+
+            if DEBUG_MODE:
+                st.write("Error type:", type(e).__name__)
+                st.exception(e)
+
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+
+            st.error("Something went wrong while preparing the review.")
+            st.caption("Please try again. If the issue continues, try a smaller notebook or clear very large output cells.")
+
+            if DEBUG_MODE:
+                st.write("Error type:", type(e).__name__)
+                st.exception(e)
