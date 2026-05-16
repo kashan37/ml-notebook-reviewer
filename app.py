@@ -5,6 +5,14 @@ from google.genai import errors
 import re
 import html
 import time
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+log = logging.getLogger("notebook_lens")
 # =========================
 # IMPORTS & SETUP
 # =========================
@@ -12,6 +20,11 @@ import time
 client = genai.Client()
 DEBUG_MODE = False
 
+st.set_page_config(
+    page_title="Notebook Lens",
+    page_icon="🛰️",
+    layout="wide"
+)
 
 # ===============================
 # CORE NOTEBOOK PARSING FUNCTIONS
@@ -27,6 +40,28 @@ def get_notebook_stats(notebook):
         "code_cells": code_cells,
         "markdown_cells": markdown_cells
     }
+
+def validate_notebook_content(notebook):
+    """
+    Returns (is_valid, reason).
+    is_valid = False blocks analysis with a clean error.
+    """
+    if not notebook.cells:
+        return False, "This notebook has no cells at all."
+
+    code_cells = [c for c in notebook.cells if c.cell_type == "code"]
+    if not code_cells:
+        return False, "No code cells found. This appears to be a markdown-only notebook."
+
+    non_empty_code = [c for c in code_cells if c.source.strip()]
+    if not non_empty_code:
+        return False, "All code cells are empty. There is no code to review."
+
+    total_code_chars = sum(len(c.source.strip()) for c in non_empty_code)
+    if total_code_chars < 80:
+        return False, "The notebook contains very little code (under 80 characters). Not enough to review."
+    
+    return True, None
 
 def get_file_size(uploaded_file):
 
@@ -104,14 +139,191 @@ def load_notebook(notebook):
 # =========================
 st.markdown("""
 <style>
-.review-card {
-    background: linear-gradient(145deg, #151821, #0f1117);
+            
+:root {
+    --nl-bg: #0b0c0f;
+    --nl-surface: #111318;
+    --nl-surface-soft: #151821;
+    --nl-border: rgba(255, 255, 255, 0.08);
+    --nl-border-strong: rgba(255, 255, 255, 0.14);
+    --nl-text: #f5f5f7;
+    --nl-muted: #a1a1aa;
+    --nl-subtle: #73737d;
+    --nl-accent: #4facfe;
+    --nl-accent-2: #76b900;
+}
+
+.stApp {
+    background:
+        radial-gradient(circle at top left, rgba(79, 172, 254, 0.08), transparent 28rem),
+        var(--nl-bg);
+}
+
+.block-container {
+    max-width: 1180px;
+    padding-top: 4.8rem;
+    padding-bottom: 4rem;
+}
+            
+.brand-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.brand-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nl-text);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0;
+    background:
+        linear-gradient(145deg, rgba(79, 172, 254, 0.28), rgba(118, 185, 0, 0.10)),
+        linear-gradient(145deg, #151821, #0f1117);
+    border: 1px solid var(--nl-border-strong);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+.app-title {
+    color: var(--nl-text);
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.05;
+    margin-bottom: 5px;
+}
+
+.app-subtitle {
+    color: var(--nl-muted);
+    font-size: 18px;
+    line-height: 1.45;
+    margin-bottom: 0;
+}
+
+.app-subtitle {
+    color: #a1a1aa;
+    font-size: 18px;
+    line-height: 1.55;
+    margin: 0 0 28px 0;
+    padding-left: 2px; /* tiny optical alignment */
+}
+
+h1, h2, h3 {
+    color: #f5f5f7;
+    letter-spacing: 0;
+}
+
+h3 {
+    font-size: 1.22rem;
+    font-weight: 650;
+    margin-top: 1.8rem;
+    margin-bottom: 0.75rem;
+}
+
+p, li {
+    line-height: 1.65;
+}
+
+div[data-testid="stMarkdownContainer"] {
+    line-height: 1.65;
+}
+
+div[data-testid="stTextArea"] textarea {
+    background-color: #0f1117;
+    color: #d7d7dd;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+pre {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-x: auto !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+}
+
+div[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+div[data-testid="stExpander"] summary {
+    font-weight: 650;
+    color: #f5f5f7;
+}
+
+div[data-testid="stTabs"] button {
+    color: #a1a1aa;
+    font-weight: 600;
+}
+
+div[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #f5f5f7;
+}
+
+div[data-testid="stFileUploader"] {
+    background: linear-gradient(145deg, rgba(21, 24, 33, 0.72), rgba(15, 17, 23, 0.72));
+    border: 1px solid var(--nl-border);
+    border-radius: 16px;
+    padding: 16px;
+}
+
+div[data-testid="stFileUploader"] section {
+    border: 1px dashed rgba(79, 172, 254, 0.28);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.018);
+}
+
+.stButton > button {
+    border-radius: 12px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--nl-accent), #2f7df4);
+    color: white;
+    border: 0;
+    padding: 0.65rem 1.1rem;
+    box-shadow: 0 10px 28px rgba(79, 172, 254, 0.18);
+}
+
+.stButton > button:hover {
+    border: 0;
+    color: white;
+    filter: brightness(1.06);
+}
+
+div[data-testid="stProgress"] > div > div > div {
+    background: linear-gradient(90deg, var(--nl-accent), var(--nl-accent-2));
+}
+
+
+.review-card {
+    background: linear-gradient(145deg, var(--nl-surface-soft), #0f1117);
+    border: 1px solid var(--nl-border);
     border-radius: 16px;
     padding: 20px;
-    min-height: 145px;
+    min-height: 165px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-
+}
+            
+.review-card:hover {
+    border-color: rgba(79, 172, 254, 0.22);
+    transform: translateY(-1px);
+    transition: border-color 180ms ease, transform 180ms ease;
 }
 
 .review-card-label {
@@ -125,7 +337,7 @@ st.markdown("""
 
 .review-card-value {
     color: #f5f5f7;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 650;
     line-height: 1.2;
     margin-bottom: 10px;
@@ -144,15 +356,15 @@ st.markdown("""
 }
 
 .info-card {
-    background: linear-gradient(145deg, #151821, #0f1117);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(145deg, var(--nl-surface-soft), #0f1117);
+    border: 1px solid var(--nl-border);
     border-radius: 16px;
     padding: 18px 20px;
     color: #f5f5f7;
     font-size: 15px;
     line-height: 1.7;
+    margin-bottom: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-
 }
 
 .info-card b {
@@ -173,31 +385,14 @@ st.markdown("""
 
 # st.title("ML Notebook Reviewer")
 st.markdown("""
-<h1 style="
-color: #e6e6e6;
-font-size: 46px;
-font-weight: 600;
-border-left: 5px solid #4facfe;
-padding-left: 12px;
-">
-Notebook Lens
-</h1>
+<div class="brand-header">
+    <div class="brand-logo">NL</div>
+    <div>
+        <div class="app-title">Notebook Lens</div>
+        <div class="app-subtitle">AI-powered reviews for Jupyter and Colab ML notebooks.</div>
+    </div>
+</div>
 """, unsafe_allow_html=True)
-
-st.markdown("""
-<p style="
-color: #b8b8b8;
-font-size: 18px;
-margin-top: -10px;
-margin-left: 17px;
-">
-AI-powered reviews for Jupyter and Colab ML notebooks.
-</p>
-""", unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
     "Upload notebook for analysis (Jupyter / Colab .ipynb),", 
@@ -474,11 +669,17 @@ def update_loading_state(progress_bar, status_text, progress, message, delay=0.1
 # GEMINI API CALL
 # =========================
 def call_gemini(prompt):
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-    return response.text
+    log.info(f"Gemini request sent | Prompt length: {len(prompt)} chars")
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        log.info(f"Gemini response received | Response length: {len(response.text)} chars")
+        return response.text
+    except Exception as e:
+        log.error(f"Gemini call failed | {type(e).__name__}: {e}")
+        raise
 
 # =========================
 # REVIEW OUTPUT PARSING
@@ -636,18 +837,40 @@ def render_review_dashboard(output, notebook_focus, stats, size):
 # STREAMLIT UI + APP LOGIC
 # ============================
 if uploaded_file is not None:
+    MAX_CHARS = 60000
 
-    notebook = nbformat.read(uploaded_file, as_version=4)
+    try:
+        notebook = nbformat.read(uploaded_file, as_version=4)
+    except Exception as e:
+        st.error("Could not read this notebook. The file may be corrupted or not a valid .ipynb.")
+        st.caption("Try re-exporting it fresh from Jupyter or Colab.")
+        if DEBUG_MODE:
+            st.write("Parse error:", type(e).__name__)
+            st.exception(e)
+        st.stop()
     stats = get_notebook_stats(notebook)
     size = get_file_size(uploaded_file)
-
     notebook_text = load_notebook(notebook)
     notebook_focus = detect_notebook_focus(notebook_text)
     reproducibility_context = detect_reproducibility_signals(notebook_text)
+    
+    is_valid, reason = validate_notebook_content(notebook)
+    if not is_valid:
+        st.error(f"No usable code cells found in notebook. {reason}")
+        st.caption("Please upload a notebook that contains actual code cells.")
+        st.stop()
 
+    log.info(f"Parse successful | Cells: {stats['total_cells']} | Code: {stats['code_cells']} | Markdown: {stats['markdown_cells']} | Focus: {notebook_focus}")
+    log.info(f"Upload received | File: {uploaded_file.name} | Size: {size} KB")
     st.success("Upload successful. Ready for analysis.")
 
-    # FILE INFO CARD
+    if len(notebook_text) > MAX_CHARS:
+            st.warning(
+                f"This notebook is large ({len(notebook_text):,} characters). "
+                f"Only the first {MAX_CHARS:,} characters were sent for review. "
+                "Later cells may not be covered."
+                )
+
     st.markdown("### File Information")
 
     st.markdown(f"""
@@ -798,9 +1021,7 @@ Focus heavily on:
     """)
 
     if st.button("Analyze Notebook"):
-        MAX_CHARS = 60000
         safe_notebook_text = notebook_text[:MAX_CHARS]
-
         # =============================
         # PROMPT BUILDER (GEMINI INPUT)
         # =============================
@@ -984,7 +1205,8 @@ Notebook: {safe_notebook_text}
             )
 
             # call gemini
-            output = call_gemini(prompt)
+            with st.spinner("Review engine is thinking..."):
+                output = call_gemini(prompt)
 
             update_loading_state(
                 progress_bar,
@@ -1047,6 +1269,7 @@ Notebook: {safe_notebook_text}
                 ])
 
         except errors.ClientError as e:
+            log.warning(f"ClientError from Gemini | {e}")
             progress_bar.empty()
             status_text.empty()
 
@@ -1064,6 +1287,7 @@ Notebook: {safe_notebook_text}
                     st.exception(e)
 
         except errors.ServerError as e:
+            log.error(f"ServerError from Gemini | {e}")
             progress_bar.empty()
             status_text.empty()
 
@@ -1075,6 +1299,7 @@ Notebook: {safe_notebook_text}
                 st.exception(e)
 
         except Exception as e:
+            log.error(f"Unexpected error | {type(e).__name__}: {e}")
             progress_bar.empty()
             status_text.empty()
 
