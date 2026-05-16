@@ -19,7 +19,7 @@ log = logging.getLogger("notebook_lens")
 # =========================
 
 client = genai.Client()
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 st.set_page_config(
     page_title="Notebook Lens",
@@ -376,6 +376,22 @@ div[data-testid="stProgress"] > div > div > div {
     margin-top: -8px;
     margin-bottom: 18px;
 }
+            
+div[data-testid="stDownloadButton"] > button {
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: linear-gradient(145deg, #151821, #0f1117) !important;
+    color: #f5f5f7 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+    border-radius: 16px !important;
+    font-weight: 600 !important;
+    width: fit-content !important;
+}
+
+div[data-testid="stDownloadButton"] > button:hover {
+    border-color: rgba(79, 172, 254, 0.22) !important;
+    filter: brightness(1.08) !important;
+}
+            
 </style>
 """, unsafe_allow_html=True)
 
@@ -1308,6 +1324,7 @@ Notebook: {safe_notebook_text}
             # call gemini
             with st.spinner("Review engine is thinking..."):
                 output = call_gemini(prompt)
+                st.session_state["review_output"] = output
 
             update_loading_state(
                 progress_bar,
@@ -1329,74 +1346,7 @@ Notebook: {safe_notebook_text}
             st.success("Analysis complete")
             progress_bar.empty()
             status_text.empty()
-            st.markdown("---")
-
-            #TXT/Markdown download
-            markdown_export = build_markdown_export(
-                output,
-                uploaded_file.name,
-                notebook_focus,
-                stats,
-                size
-            )
-            st.download_button(
-                label="Download Review (.md)",
-                data=markdown_export,
-                file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.md",
-                mime="text/markdown"
-            )
-            
-            pdf_export = build_pdf_export(
-                output,
-                uploaded_file.name,
-                notebook_focus,
-                stats,
-                size
-            )
-            st.download_button(
-                label="Download Report (.pdf)",
-                data=pdf_export,
-                file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.pdf",
-                mime="application/pdf"
-            )
-
-            render_review_dashboard(output, notebook_focus, stats, size)
-
-            summary_tab, mistakes_tab, improvements_tab, questions_tab = st.tabs([
-                "Summary",
-                "Mistakes",
-                "Improvements",
-                "Technical Questions"
-            ])
-
-            with summary_tab:
-                render_sections_as_expanders(output, [
-                    "Project Summary",
-                    "Evidence Found",
-                    "What Looks Good",
-                    "Notebook Scores",
-                    "Final Verdict"
-                ])
-
-            with mistakes_tab:
-                render_sections_as_expanders(output, [
-                    "Mistakes & Bad Practices",
-                    "Data & Preprocessing Review",
-                    "Model & Training Review",
-                    "Reproducibility Review",
-                    "Overfitting / Underfitting Analysis"
-                ])
-
-            with improvements_tab:
-                render_sections_as_expanders(output, [
-                    "Improvements"
-                ])
-
-            with questions_tab:
-                render_sections_as_expanders(output, [
-                    "Technical Questions",
-                    "Technical Review Questions"
-                ])
+            st.session_state["review_ready"] = True
 
         except errors.ClientError as e:
             log.warning(f"ClientError from Gemini | {e}")
@@ -1406,8 +1356,8 @@ Notebook: {safe_notebook_text}
             error_text = str(e)
 
             if "RESOURCE_EXHAUSTED" in error_text or "429" in error_text:
-                st.error("Gemini quota limit reached.")
-                st.caption("You hit the current request limit. Please wait and try again later.")
+                st.error("Review limit reached.")
+                st.caption("The review service is temporarily unavailable. Please wait a moment and try again.")
             else:
                 st.error("The AI review service could not complete the request.")
                 st.caption("Please try again in a moment.")
@@ -1439,3 +1389,75 @@ Notebook: {safe_notebook_text}
             if DEBUG_MODE:
                 st.write("Error type:", type(e).__name__)
                 st.exception(e)
+
+    if st.session_state.get("review_ready") and st.session_state.get("review_output"):
+        output = st.session_state["review_output"]
+        st.markdown("---")
+
+        markdown_export = build_markdown_export(
+            output,
+            uploaded_file.name,
+            notebook_focus,
+            stats,
+            size
+        )
+        pdf_export = build_pdf_export(
+            output,
+            uploaded_file.name,
+            notebook_focus,
+            stats,
+            size
+        )
+
+        st.markdown('<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:28px;">', unsafe_allow_html=True)
+        st.download_button(
+            label="⬇️ Download Review (.md)",
+            data=markdown_export,
+            file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.md",
+            mime="text/markdown"
+        )
+        st.download_button(
+            label="⬇️ Download Report (.pdf)",
+            data=pdf_export,
+            file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.pdf",
+            mime="application/pdf"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        render_review_dashboard(output, notebook_focus, stats, size)
+
+        summary_tab, mistakes_tab, improvements_tab, questions_tab = st.tabs([
+            "Summary",
+            "Mistakes",
+            "Improvements",
+            "Technical Questions"
+        ])
+
+        with summary_tab:
+            render_sections_as_expanders(output, [
+                "Project Summary",
+                "Evidence Found",
+                "What Looks Good",
+                "Notebook Scores",
+                "Final Verdict"
+            ])
+
+        with mistakes_tab:
+            render_sections_as_expanders(output, [
+                "Mistakes & Bad Practices",
+                "Data & Preprocessing Review",
+                "Model & Training Review",
+                "Reproducibility Review",
+                "Overfitting / Underfitting Analysis"
+            ])
+
+        with improvements_tab:
+            render_sections_as_expanders(output, [
+                "Improvements"
+            ])
+
+        with questions_tab:
+            render_sections_as_expanders(output, [
+                "Technical Questions",
+                "Technical Review Questions"
+            ])
