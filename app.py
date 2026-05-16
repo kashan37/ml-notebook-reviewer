@@ -6,6 +6,7 @@ import re
 import html
 import time
 import logging
+from fpdf import FPDF
 
 logging.basicConfig(
     level=logging.INFO,
@@ -179,10 +180,6 @@ st.markdown("""
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--nl-text);
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: 0;
     background:
         linear-gradient(145deg, rgba(79, 172, 254, 0.28), rgba(118, 185, 0, 0.10)),
         linear-gradient(145deg, #151821, #0f1117);
@@ -386,7 +383,31 @@ div[data-testid="stProgress"] > div > div > div {
 # st.title("ML Notebook Reviewer")
 st.markdown("""
 <div class="brand-header">
-    <div class="brand-logo">NL</div>
+    <div class="brand-logo">
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="15" fill="none" stroke="#4facfe" stroke-width="1.8"/>
+    <circle cx="16" cy="16" r="12" fill="#4facfe" fill-opacity="0.05"/>
+    <line x1="9" y1="9" x2="16" y2="13" stroke="#4facfe" stroke-opacity="0.5" stroke-width="1"/>
+    <line x1="9" y1="16" x2="16" y2="13" stroke="#4facfe" stroke-opacity="0.5" stroke-width="1"/>
+    <line x1="9" y1="23" x2="16" y2="19" stroke="#4facfe" stroke-opacity="0.5" stroke-width="1"/>
+    <line x1="9" y1="9" x2="16" y2="19" stroke="#4facfe" stroke-opacity="0.5" stroke-width="1"/>
+    <line x1="9" y1="23" x2="16" y2="13" stroke="#4facfe" stroke-opacity="0.5" stroke-width="1"/>
+    <line x1="16" y1="13" x2="23" y2="9" stroke="#76b900" stroke-opacity="0.6" stroke-width="1"/>
+    <line x1="16" y1="13" x2="23" y2="16" stroke="#76b900" stroke-opacity="0.6" stroke-width="1"/>
+    <line x1="16" y1="19" x2="23" y2="16" stroke="#76b900" stroke-opacity="0.6" stroke-width="1"/>
+    <line x1="16" y1="19" x2="23" y2="23" stroke="#76b900" stroke-opacity="0.6" stroke-width="1"/>
+    <circle cx="9" cy="9" r="2.2" fill="#4facfe"/>
+    <circle cx="9" cy="16" r="2.2" fill="#4facfe"/>
+    <circle cx="9" cy="23" r="2.2" fill="#4facfe"/>
+    <circle cx="16" cy="13" r="2.2" fill="#4facfe" opacity="0.85"/>
+    <circle cx="16" cy="19" r="2.2" fill="#4facfe" opacity="0.85"/>
+    <circle cx="23" cy="9" r="2.2" fill="#76b900"/>
+    <circle cx="23" cy="16" r="2.2" fill="#76b900"/>
+    <circle cx="23" cy="23" r="2.2" fill="#76b900"/>
+    <path d="M25 25 L31 31" stroke="#4facfe" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M21 21 Q23 20 25 22" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1.2" stroke-linecap="round"/>
+</svg>
+    </div>
     <div>
         <div class="app-title">Notebook Lens</div>
         <div class="app-subtitle">AI-powered reviews for Jupyter and Colab ML notebooks.</div>
@@ -737,6 +758,86 @@ def render_sections_as_expanders(review_text, headings, first_expanded=True):
         ):
             st.markdown(section["content"])
 
+# =========================
+# DOWNLOAD HELPERS
+# =========================
+def build_markdown_export(output, notebook_name, notebook_focus, stats, size):
+    lines = []
+    lines.append(f"# Notebook Lens Review")
+    lines.append(f"\n**Notebook:** {notebook_name}")
+    lines.append(f"**Focus:** {notebook_focus}")
+    lines.append(f"**Cells:** {stats['total_cells']} total · {stats['code_cells']} code · {stats['markdown_cells']} markdown")
+    lines.append(f"**File Size:** {size} KB")
+    lines.append(f"\n---\n")
+    lines.append(output)
+    return "\n".join(lines)
+
+def build_pdf_export(output, notebook_name, notebook_focus, stats, size):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    # Header
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(79, 172, 254)
+    pdf.cell(0, 12, "Notebook Lens Review", new_x="LMARGIN", new_y="NEXT")
+
+    # Metadata
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(160, 160, 170)
+    pdf.cell(0, 6, f"Notebook: {notebook_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Focus: {notebook_focus}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Cells: {stats['total_cells']} total  |  {stats['code_cells']} code  |  {stats['markdown_cells']} markdown", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"File Size: {size} KB", new_x="LMARGIN", new_y="NEXT")
+
+    # Divider
+    pdf.ln(4)
+    pdf.set_draw_color(79, 172, 254)
+    pdf.set_line_width(0.5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(6)
+
+    # Sections
+    section_headings = [
+        "Project Summary",
+        "Evidence Found",
+        "What Looks Good",
+        "Mistakes & Bad Practices",
+        "Data & Preprocessing Review",
+        "Model & Training Review",
+        "Reproducibility Review",
+        "Overfitting / Underfitting Analysis",
+        "Improvements",
+        "Notebook Scores",
+        "Technical Questions",
+        "Final Verdict"
+    ]
+    for heading in section_headings:
+        body = extract_section_body(output, heading)
+        if not body:
+            continue
+
+        # Section heading
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_text_color(79, 172, 254)
+        pdf.cell(0, 10, heading, new_x="LMARGIN", new_y="NEXT")
+
+        # Section body — clean markdown symbols
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(50, 50, 60)
+
+        clean_body = re.sub(r"#{1,6}\s*", "", body)
+        clean_body = re.sub(r"\*\*(.*?)\*\*", r"\1", clean_body)
+        clean_body = re.sub(r"\*(.*?)\*", r"\1", clean_body)
+        clean_body = re.sub(r"`(.*?)`", r"\1", clean_body)
+        clean_body = re.sub(r"```.*?```", "[code block]", clean_body, flags=re.DOTALL)
+
+        safe_body = clean_body.encode("latin-1", errors="replace").decode("latin-1")
+
+        pdf.multi_cell(0, 6, safe_body)
+        pdf.ln(4)
+
+    return bytes(pdf.output())
 
 # =========================
 # DASHBOARD CARD HELPERS
@@ -1229,7 +1330,36 @@ Notebook: {safe_notebook_text}
             progress_bar.empty()
             status_text.empty()
             st.markdown("---")
+
+            #TXT/Markdown download
+            markdown_export = build_markdown_export(
+                output,
+                uploaded_file.name,
+                notebook_focus,
+                stats,
+                size
+            )
+            st.download_button(
+                label="Download Review (.md)",
+                data=markdown_export,
+                file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.md",
+                mime="text/markdown"
+            )
             
+            pdf_export = build_pdf_export(
+                output,
+                uploaded_file.name,
+                notebook_focus,
+                stats,
+                size
+            )
+            st.download_button(
+                label="Download Report (.pdf)",
+                data=pdf_export,
+                file_name=f"notebook_lens_{uploaded_file.name.replace('.ipynb', '')}.pdf",
+                mime="application/pdf"
+            )
+
             render_review_dashboard(output, notebook_focus, stats, size)
 
             summary_tab, mistakes_tab, improvements_tab, questions_tab = st.tabs([
