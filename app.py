@@ -18,7 +18,7 @@ log = logging.getLogger("notebook_lens")
 # =========================
 
 client = genai.Client()
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 st.set_page_config(
     page_title="Notebook Lens",
