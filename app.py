@@ -571,7 +571,17 @@ def detect_notebook_focus(notebook_text):
             "logisticregression",
             "randomforestclassifier",
             "categorical_crossentropy",
-            "binary_crossentropy"
+            "binary_crossentropy",
+            "naive bayes",
+            "naivebayes",
+            "gaussiannb",
+            "multinomialnb",
+            "bernoullinb",
+            "prior probability",
+            "posterior probability",
+            "likelihood",
+            "bayes theorem",
+            "class probability"
         ],
         "Regression": [
             "mean_squared_error",
@@ -589,6 +599,107 @@ def detect_notebook_focus(notebook_text):
             "agglomerativeclustering",
             "silhouette_score",
             "clustering"
+        ],
+        "Reinforcement Learning": [
+            "reinforcement learning",
+            "rl",
+            "q-learning",
+            "qlearning",
+            "dqn",
+            "policy gradient",
+            "reward",
+            "environment",
+            "gym",
+            "gymnasium",
+            "agent",
+            "episode",
+            "epsilon",
+            "bellman"
+        ],
+        "Object Detection": [
+            "yolo",
+            "yolov",
+            "faster rcnn",
+            "fasterrcnn",
+            "ssd",
+            "object detection",
+            "bounding box",
+            "anchor box",
+            "iou",
+            "map",
+            "nms",
+            "non maximum suppression",
+            "detectron"
+        ],
+        "Image Segmentation": [
+            "segmentation",
+            "unet",
+            "u-net",
+            "semantic segmentation",
+            "instance segmentation",
+            "mask rcnn",
+            "maskrcnn",
+            "pixel",
+            "deeplabv"
+        ],
+        "Audio / Speech": [
+            "librosa",
+            "torchaudio",
+            "mel spectrogram",
+            "mfcc",
+            "waveform",
+            "speech recognition",
+            "whisper",
+            "audio",
+            "sound",
+            "wav2vec"
+        ],
+        "Recommendation System": [
+            "collaborative filtering",
+            "content based",
+            "matrix factorization",
+            "svd",
+            "cosine similarity",
+            "user item",
+            "rating",
+            "recommendation",
+            "recommender"
+        ],
+        "Anomaly Detection": [
+            "anomaly detection",
+            "outlier",
+            "isolation forest",
+            "one class svm",
+            "novelty detection",
+            "fraud detection",
+            "anomaly score"
+        ],
+        "Data Visualization": [
+            "plotly",
+            "dash",
+            "bokeh",
+            "altair",
+            "matplotlib",
+            "seaborn",
+            "visualization",
+            "interactive plot",
+            "dashboard"
+        ],
+        "MLOps / Deployment": [
+            "docker",
+            "kubernetes",
+            "fastapi",
+            "flask",
+            "streamlit",
+            "gradio",
+            "onnx",
+            "torchscript",
+            "triton",
+            "bentoml",
+            "mlflow",
+            "model serving",
+            "inference",
+            "pipeline"
         ]
     }
 
@@ -600,11 +711,19 @@ def detect_notebook_focus(notebook_text):
         "Computer Vision": 2,
         "NLP": 2,
         "Feature Engineering": 3,
-        "Exploratory Data Analysis": 3,
+        "Exploratory Data Analysis": 5,
         "Time Series": 2,
-        "Classification": 2,
+        "Classification": 1,
         "Regression": 2,
-        "Clustering": 2
+        "Clustering": 2,
+        "Reinforcement Learning": 2,
+        "Object Detection": 2,
+        "Image Segmentation": 1,
+        "Audio / Speech": 2,
+        "Recommendation System": 2,
+        "Anomaly Detection": 1,
+        "Data Visualization": 3,
+        "MLOps / Deployment": 2
     }
 
     scores = {
@@ -815,6 +934,7 @@ def build_pdf_export(output, notebook_name, notebook_focus, stats, size):
 
     # Sections
     section_headings = [
+        "Top 3 Priorities",
         "Project Summary",
         "Evidence Found",
         "What Looks Good",
@@ -854,6 +974,47 @@ def build_pdf_export(output, notebook_name, notebook_focus, stats, size):
         pdf.ln(4)
 
     return bytes(pdf.output())
+
+# =========================
+# TOP 3 PRIORITIES
+# =========================
+def extract_top_priorities(review_text):
+    body = extract_section_body(review_text, "Top 3 Priorities")
+    if not body:
+        return []
+
+    priorities = []
+    for line in body.strip().split("\n"):
+        line = line.strip()
+        if line and line[0].isdigit():
+            # Remove leading "1. " "2. " etc
+            clean = re.sub(r"^\d+\.\s*", "", line).strip()
+            if clean:
+                priorities.append(clean)
+
+    return priorities[:3]
+
+def render_top_priorities(review_text):
+    priorities = extract_top_priorities(review_text)
+
+    if not priorities:
+        return
+
+    st.markdown("### 🎯 Top 3 Priorities")
+    st.markdown(
+        '<div class="dashboard-caption">Fix these first. Everything else can wait.</div>',
+        unsafe_allow_html=True
+    )
+
+    for i, priority in enumerate(priorities, 1):
+        st.markdown(f"""
+        <div class="info-card" style="border-left: 3px solid #4facfe; margin-bottom: 8px;">
+            <span style="color:#4facfe; font-weight:700; font-size:18px;">#{i}</span>
+            &nbsp;&nbsp;{html.escape(priority)}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================
 # DASHBOARD CARD HELPERS
@@ -1000,10 +1161,21 @@ if uploaded_file is not None:
 
 
     st.markdown(f"""
-### Detected Notebook Focus
-
-**{notebook_focus}**
-""")
+    ### Detected Notebook Focus
+    <span style="
+        background: linear-gradient(135deg, rgba(79,172,254,0.15), rgba(79,172,254,0.05));
+        border: 1px solid rgba(79,172,254,0.35);
+        color: #4facfe;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        display: inline-block;
+        margin-top: 6px;
+    ">
+    {notebook_focus}
+    </span>
+    """, unsafe_allow_html=True)
 
     # NOTEBOOK CONTENT
     st.markdown("### Notebook Preview")
@@ -1145,11 +1317,11 @@ Focus heavily on:
 
         def build_prompt(dynamic_instruction, reproducibility_context, safe_notebook_text):
             prompt = f"""
-You are a senior Machine learning engineer and technical reviewer evaluating a Jupyter notebook..
+You are a senior Machine Learning engineer and technical reviewer evaluating a Jupyter notebook.
 
 Your goal is to give a helpful, friendly, practical review that is easy to read.
 Be honest about problems, always roast a little bit and don't be boring.
-Avoid generic advice. Tie every point to something visible in the notebook when possible.
+Avoid generic advice. Tie every single point to something visible in the notebook.
 
 Your job is to:
 - Be precise and technical
@@ -1161,14 +1333,18 @@ Your job is to:
 - Quote short relevant snippets or behaviors from the notebook when useful
 - Do not make generic ML comments unless supported by notebook evidence
 
+CRITICAL RULES — follow these without exception:
+- Every single point in every section must reference specific code, functions, variable names, or outputs from the notebook. If you cannot tie a point to specific evidence, do not include it.
+- NEVER mention a library, function, metric, or output that is not explicitly visible in the notebook text provided. If unsure whether something exists in the notebook, do not mention it.
+- Do NOT hallucinate missing components.
+- If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
+- Only suggest code that preserves data integrity assumptions.
+- If dataset structure is unclear, first recommend validation or inspection steps before transformations.
+- Do not assume ordering, pairing, or schema correctness unless explicitly shown in the notebook evidence.
+- Be conservative with scores. A notebook with no validation split, no seeds, and no callbacks cannot score above 5 in ML Rigor regardless of other qualities.
+- Do not give high scores unless strong notebook evidence supports them.
+- Avoid inflated scoring.
 
-Do NOT hallucinate missing components.
-If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
-Only suggest code that preserves data integrity assumptions.
-If dataset structure is unclear, first recommend validation or inspection steps before transformations.
-Do not assume ordering, pairing, or schema correctness unless explicitly shown in the notebook evidence.
-Do not give high scores unless strong notebook evidence supports them.
-Avoid inflated scoring.
 {dynamic_instruction}
 {reproducibility_context}
 Use the reproducibility signals above to guide your review, but do not overstate them.
@@ -1180,6 +1356,16 @@ Do NOT rewrite large parts of the notebook unless the notebook evidence clearly 
 
 Return your response in this STRICT format:
 Use the exact section headings shown below. Do not rename headings, because the app uses them to organize the review into tabs:
+
+### Top 3 Priorities
+List exactly 3 most critical things the author should fix or improve first.
+Each priority must name a specific thing from the notebook — a specific function, variable, pattern, or behavior.
+Each priority must be one clear, specific, actionable sentence.
+Number them 1, 2, 3.
+No explanations, no sub-bullets. Just 3 lines.
+BAD example: "Improve your validation strategy."
+GOOD example: "Add a validation_split parameter to model.fit() since no validation data is currently passed."
+Base every priority on actual evidence found in the notebook.
 
 ### Project Summary
 Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
@@ -1205,7 +1391,6 @@ For each issue, include:
 Only include issues that are supported by notebook evidence.
 If something is only a risk, label it as a risk, not a confirmed mistake.
 
-
 ### Data & Preprocessing Review
 Review missing values, encoding, scaling, feature selection, data leakage, train/test split, and preprocessing quality.
 Reference actual preprocessing steps, functions, or code patterns found in the notebook.
@@ -1228,11 +1413,11 @@ Comment on:
 Use only notebook evidence.
 If any item is missing or unclear, say "Not enough information."
 
-
 ### Overfitting / Underfitting Analysis
 Explain any signs or risks of overfitting or underfitting.
 Suggest practical ways to reduce those risks.
 Use notebook evidence such as training logs, validation metrics, learning curves, or output behavior when making conclusions.
+If no training metrics are visible, say "Not enough training metrics found to confidently evaluate overfitting."
 
 ### Improvements
 Give clear, prioritized improvements.
@@ -1243,10 +1428,9 @@ Label them as:
 - Advanced improvements
 
 For each improvement, explain:
-- what to change
+- what to change specifically — name the function, variable, or section
 - why it improves the notebook
 - where it applies based on notebook evidence
-
 
 ### Notebook Scores
 Give scores from 1-10 for the following areas.
@@ -1267,11 +1451,17 @@ Scoring Guidelines:
 - 7-8 = strong
 - 9-10 = exceptional
 
+Scoring Rules:
+- No validation split = ML Rigor cannot exceed 5
+- No random seeds = ML Rigor cannot exceed 6
+- No evaluation metrics = ML Rigor cannot exceed 4
+- Generic or missing comments = Readability cannot exceed 5
+
 ### Technical Questions
 Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
-Questions should test the author’s reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
-Each question must be tied to something visible in the notebook.
-Avoid generic ML questions.
+Questions should test the author's reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
+Each question must reference something specific and visible in the notebook.
+Avoid generic ML questions that could apply to any notebook.
 
 ### Final Verdict
 Give a short friendly verdict:
@@ -1424,13 +1614,14 @@ Notebook: {safe_notebook_text}
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
+        render_top_priorities(output)
         render_review_dashboard(output, notebook_focus, stats, size)
 
         summary_tab, mistakes_tab, improvements_tab, questions_tab = st.tabs([
             "Summary",
-            "Mistakes",
+            "Technical Audit",
             "Improvements",
-            "Technical Questions"
+            "Review Questions"
         ])
 
         with summary_tab:
