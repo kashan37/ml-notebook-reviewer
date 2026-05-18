@@ -20,6 +20,8 @@ log = logging.getLogger("notebook_lens")
 
 client = genai.Client()
 DEBUG_MODE = False
+TEST_MODE = False  #set False for real model calls
+CHAT_TEST_MODE = False
 
 st.set_page_config(
     page_title="Notebook Lens",
@@ -391,6 +393,100 @@ div[data-testid="stDownloadButton"] > button:hover {
     border-color: rgba(79, 172, 254, 0.22) !important;
     filter: brightness(1.08) !important;
 }
+            
+[data-testid="stBottom"] {
+    background: var(--nl-bg) !important;
+    border-top: none !important;
+    padding: 0px 0 !important;
+}
+
+[data-testid="stBottom"] > div {
+    background: transparent !important;
+}
+
+div[data-testid="stChatMessageContainer"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+div[data-testid="stChatInput"] textarea {
+    background: transparent !important;
+    color: #f5f5f7 !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 20px !important;
+    padding: 6px 0 !important;
+}
+            
+div[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 4px 0 !important;
+}
+
+div[data-testid="stChatMessage"] p {
+    color: #f5f5f7 !important;
+    line-height: 1.6 !important;
+    font-size: 15px !important;
+}
+
+div[data-testid="stChatMessage"] code {
+    background: rgba(79, 172, 254, 0.1) !important;
+    color: #4facfe !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    font-size: 13px !important;
+}
+
+div[data-testid="stChatMessage"] pre {
+    background: #0f1117 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
+}
+
+.suggestion-buttons .stButton > button {
+    background: transparent !important;
+    border: 1px solid rgba(79, 172, 254, 0.3) !important;
+    color: #a1a1aa !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 0.4rem 0.8rem !important;
+    box-shadow: none !important;
+    border-radius: 12px !important;
+    white-space: normal !important;
+    min-height: 72px !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.suggestion-buttons .stButton > button:hover {
+    border-color: rgba(79, 172, 254, 0.7) !important;
+    color: #f5f5f7 !important;
+    background: rgba(79, 172, 254, 0.08) !important;
+}
+            
+/* Secondary buttons: chat suggestions + clear chat */
+button[kind="secondary"] {
+    background: transparent !important;
+    border: 1px solid rgba(79, 172, 254, 0.3) !important;
+    color: #a1a1aa !important;
+    box-shadow: none !important;
+}
+
+button[kind="secondary"]:hover {
+    background: rgba(79, 172, 254, 0.08) !important;
+    border-color: rgba(79, 172, 254, 0.7) !important;
+    color: #f5f5f7 !important;
+}
+
             
 </style>
 """, unsafe_allow_html=True)
@@ -821,6 +917,122 @@ def update_loading_state(progress_bar, status_text, progress, message, delay=0.1
     status_text.markdown(f"**{message}**")
     time.sleep(delay)
 
+
+# =========================
+# CHAT SUGGESTIONS
+# =========================
+def get_chat_suggestions(notebook_focus):
+    base_suggestions = [
+        "What should I fix first in my notebook?",
+        "How can I make my results more reproducible?",
+        "What interview questions should I prepare for this project?",
+    ]
+
+    focus_suggestions = {
+        "Computer Vision": [
+            "Why might my model be overfitting on the training images?",
+            "What augmentation strategy would improve my model?",
+            "How can I improve my validation accuracy?",
+        ],
+        "Classification": [
+            "How can I handle class imbalance in my dataset?",
+            "Which evaluation metric is most appropriate for my problem?",
+            "How would I improve my confusion matrix results?",
+        ],
+        "Regression": [
+            "What residual issues should I check for?",
+            "How can I reduce my MSE score?",
+            "Are my features properly scaled for this model?",
+        ],
+        "NLP": [
+            "Is my tokenization strategy appropriate for this task?",
+            "How can I improve my text preprocessing pipeline?",
+            "What embeddings would work better for this problem?",
+        ],
+        "GAN": [
+            "What signs of mode collapse should I watch for?",
+            "How can I stabilize my GAN training?",
+            "How do I evaluate the quality of generated samples?",
+        ],
+        "Transformer / LLM": [
+            "Is my fine-tuning setup appropriate for this task?",
+            "How can I reduce hallucination risks in my outputs?",
+            "What evaluation strategy fits this LLM task?",
+        ],
+        "Time Series": [
+            "How can I check for data leakage in my time series?",
+            "Is my validation strategy appropriate for time series data?",
+            "How should I handle seasonality in my forecasting?",
+        ],
+        "Clustering": [
+            "How do I know if my cluster count is appropriate?",
+            "Should I scale my features before clustering?",
+            "How can I evaluate the quality of my clusters?",
+        ],
+        "Reinforcement Learning": [
+            "How can I tell if my agent is learning effectively?",
+            "What reward shaping issues should I check for?",
+            "How do I prevent my agent from overfitting to the environment?",
+        ],
+        "Object Detection": [
+            "How can I improve my mAP score?",
+            "Is my anchor box configuration appropriate?",
+            "How should I handle class imbalance in object detection?",
+        ],
+        "Exploratory Data Analysis": [
+            "What key insights am I missing from my EDA?",
+            "How can I improve my visualization choices?",
+            "What statistical tests should I run on this data?",
+        ],
+        "Feature Engineering": [
+            "Am I at risk of data leakage in my preprocessing pipeline?",
+            "Which feature selection method fits my dataset best?",
+            "How should I handle my missing values differently?",
+        ],
+    }
+
+    specific = focus_suggestions.get(notebook_focus, base_suggestions)
+    return specific[:3]
+
+# =========================
+# CHAT PROMPT BUILDER
+# =========================
+def build_chat_prompt(user_question, notebook_text, review_output, chat_history):
+
+    history_text = ""
+    for message in chat_history[:-1]:
+        role = "User" if message["role"] == "user" else "Assistant"
+        history_text += f"{role}: {message['content']}\n"
+
+    prompt = f"""
+You are a strict ML code review assistant. You have access to a Jupyter notebook and its review.
+Your job is to answer follow-up questions from the author about their notebook.
+
+STRICT RULES — follow every single one without exception:
+- Answer ONLY from evidence explicitly visible in the notebook text or review provided below.
+- NEVER invent, assume, or extrapolate architecture details, results, metrics, or functions not shown.
+- NEVER say "typically", "usually", "in most cases" — only talk about THIS specific notebook.
+- If the notebook does not contain enough evidence to answer confidently, say exactly: "The notebook does not provide enough information to answer this confidently."
+- Keep answers to 3-5 sentences maximum. No long explanations.
+- Answer directly. No filler phrases like "Great question!", "Certainly!", or "Of course!".
+- Reference specific variable names, function names, or outputs from the notebook when possible.
+- Do not repeat or summarize the full review. Answer only the specific question asked.
+- If the user asks something unrelated to the notebook or ML, say: "I can only answer questions about your notebook and its review."
+- Do not make up improvement suggestions unless they are directly supported by notebook evidence.
+
+NOTEBOOK TEXT:
+{notebook_text[:40000]}
+FULL REVIEW:
+{review_output[:8000]}
+CONVERSATION SO FAR:
+{history_text}
+USER QUESTION:
+{user_question}
+
+Answer in 3-5 sentences maximum. Be specific. Be honest about uncertainty.
+"""
+    return prompt
+
 # =========================
 # GEMINI API CALL
 # =========================
@@ -1110,6 +1322,14 @@ def render_review_dashboard(output, notebook_focus, stats, size):
         verdict_preview
     )
 
+# =========================
+# SESSION STATE INIT
+# =========================
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
+
+if "pending_question" not in st.session_state:
+    st.session_state["pending_question"] = None
 
 # ============================
 # STREAMLIT UI + APP LOGIC
@@ -1309,7 +1529,7 @@ Focus heavily on:
      - clarity of conclusions and limitations
     """)
 
-    if st.button("Analyze Notebook"):
+    if st.button("Analyze Notebook", type="primary"):
         safe_notebook_text = notebook_text[:MAX_CHARS]
         # =============================
         # PROMPT BUILDER (GEMINI INPUT)
@@ -1512,9 +1732,83 @@ Notebook: {safe_notebook_text}
             )
 
             # call gemini
-            with st.spinner("Review engine is thinking..."):
-                output = call_gemini(prompt)
+
+            if TEST_MODE:
+                output = """### Top 3 Priorities
+1. Add a validation_split parameter to model.fit() since no validation data is currently passed.
+2. Set a random seed using np.random.seed() to make results reproducible.
+3. Add EarlyStopping callback to prevent overfitting during training.
+
+### Project Summary
+This notebook builds a CNN image classifier using TensorFlow. It loads data using image_dataset_from_directory and trains a sequential model with Conv2D layers.
+
+### Evidence Found
+- TensorFlow and Keras imported
+- image_dataset_from_directory used for data loading
+- Conv2D, MaxPooling2D, Dense layers detected
+- model.fit() called without validation_split
+- No random seed detected
+
+### What Looks Good
+- Clean data loading pipeline using image_dataset_from_directory
+- Proper use of Conv2D and MaxPooling2D layers
+- Model compiled with appropriate loss function
+
+### Mistakes & Bad Practices
+- Problem: No validation split
+- Evidence: model.fit() called without validation_split or validation_data
+- Why it matters: Cannot detect overfitting during training
+- How to fix it: Add validation_split=0.2 to model.fit()
+
+### Data & Preprocessing Review
+Preprocessing appears minimal. image_dataset_from_directory handles basic loading but no augmentation detected. Not enough information about normalization.
+
+### Model & Training Review
+Sequential CNN model detected. No callbacks found. Training runs for fixed epochs with no early stopping.
+
+### Reproducibility Review
+- Random seeds: Not found
+- Train/test split: Not enough information
+- Callbacks: Not found
+- Logging: Not found
+
+### Overfitting / Underfitting Analysis
+Not enough training metrics found to confidently evaluate overfitting. No validation loss curve visible in the notebook.
+
+### Improvements
+Quick wins:
+- Add validation_split=0.2 to model.fit()
+- Set np.random.seed(42) at the top
+
+Medium improvements:
+- Add EarlyStopping and ModelCheckpoint callbacks
+- Add image augmentation using RandomFlip and RandomRotation
+
+Advanced improvements:
+- Use transfer learning with EfficientNetB0 as base model
+
+### Notebook Scores
+- Code Quality: 5 — Basic structure present but missing reproducibility setup
+- ML Rigor: 4 — No validation split or callbacks detected
+- Experimentation: 3 — No hyperparameter tuning or experiment tracking
+- Readability: 6 — Code is readable but lacks markdown explanations
+
+### Technical Questions
+1. Why did you choose not to include a validation split in model.fit()?
+2. How would you detect overfitting without a validation curve?
+3. What augmentation strategy would you apply to this dataset?
+4. Why is a random seed important for reproducibility in this notebook?
+5. How would you improve this notebook for production deployment?
+
+### Final Verdict
+This notebook shows a solid understanding of CNN basics but needs reproducibility improvements. Biggest strength is the clean data pipeline. Biggest fix is adding validation split. Currently Improving level."""
                 st.session_state["review_output"] = output
+            else:
+                with st.spinner("Review engine is thinking..."):
+                    output = call_gemini(prompt)
+                    st.session_state["review_output"] = output
+
+
 
             update_loading_state(
                 progress_bar,
@@ -1652,3 +1946,113 @@ Notebook: {safe_notebook_text}
                 "Technical Questions",
                 "Technical Review Questions"
             ])
+
+        # =========================
+        # CHAT WITH NOTEBOOK
+        # =========================
+        chat_col1, chat_col2 = st.columns([6, 1])
+        with chat_col1:
+            st.markdown("### Chat with your Notebook")
+            st.markdown(
+                '<div class="dashboard-caption">Ask follow-up questions about your notebook and review.</div>',
+                unsafe_allow_html=True
+            )
+        with chat_col2:
+            if st.button("Clear Chat"):
+                st.session_state["chat_history"] = []
+                st.rerun()
+
+        # Show suggestions only when chat is empty
+        if not st.session_state["chat_history"]:
+            st.markdown(
+                '<div class="dashboard-caption" style="margin-top: 12px;">Suggested questions — click to ask:</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown('<div class="suggestion-buttons">', unsafe_allow_html=True)
+
+            suggestions = get_chat_suggestions(notebook_focus)
+            sug_cols = st.columns(len(suggestions))
+            for i, suggestion in enumerate(suggestions):
+                with sug_cols[i]:
+                    if st.button(suggestion, key=f"sug_{i}", use_container_width= True):
+                        st.session_state["chat_history"].append({
+                            "role": "user",
+                            "content": suggestion
+                        })
+                        st.session_state["pending_question"] = suggestion
+                        st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        
+        # Display existing chat history
+        for message in st.session_state["chat_history"]:
+            if message["role"] == "user":
+                with st.chat_message("user"):
+                    st.markdown(f'<div style="color:#f5f5f7; font-size:15px; line-height:1.6;">{html.escape(message["content"])}</div>', unsafe_allow_html=True)
+            else:
+                with st.chat_message("assistant"):
+                    st.markdown(message["content"])
+
+
+        # Chat input box
+        user_question = st.chat_input("Ask about your code, results, or improvements...")
+
+        # Handle both typed questions and suggestion button clicks
+        active_question = user_question or st.session_state.pop("pending_question", None)
+
+        if active_question:
+            if user_question:
+                # Typed question — add to history and show immediately
+                st.session_state["chat_history"].append({
+                    "role": "user",
+                    "content": active_question
+                })
+
+                with st.chat_message("user"):
+                    st.markdown(
+                        f'<div style="color:#f5f5f7; font-size:15px; line-height:1.6;">{html.escape(active_question)}</div>',
+                        unsafe_allow_html=True
+                    )
+
+
+            # Build prompt and call Gemini
+            with st.chat_message("assistant"):
+                if CHAT_TEST_MODE:
+                    chat_response = f"This is a test response for: '{active_question}'. Gemini is not being called right now."
+                    st.session_state["chat_history"].append({
+                        "role": "assistant",
+                        "content": chat_response
+                    })
+                    st.markdown(chat_response)
+
+                else:
+                    with st.spinner("Thinking..."):
+                        try:
+                            chat_prompt = build_chat_prompt(
+                                active_question,
+                                notebook_text,
+                                output,
+                                st.session_state["chat_history"]
+                            )
+                            chat_response = call_gemini(chat_prompt)
+                            st.session_state["chat_history"].append({
+                                "role": "assistant",
+                                "content": chat_response
+                            })
+                            st.markdown(chat_response)
+
+                        except errors.ClientError as e:
+                            error_text = str(e)
+                            if "RESOURCE_EXHAUSTED" in error_text or "429" in error_text:
+                                st.error("Review limit reached. Please wait and try again.")
+                            else:
+                                st.error("Could not get a response. Please try again.")
+
+                        except errors.ServerError as e:
+                            log.error(f"Chat server error | {e}")
+                            st.error("The AI chat service is temporarily busy. Please try again in a moment.")
+
+                        except Exception as e:
+                            log.error(f"Chat error | {type(e).__name__}: {e}")
+                            st.error("Something went wrong. Please try again.")
