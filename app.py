@@ -19,7 +19,7 @@ log = logging.getLogger("notebook_lens")
 # =========================
 
 client = genai.Client()
-DEBUG_MODE = False
+DEBUG_MODE = True
 TEST_MODE = False  #set False for real model calls
 CHAT_TEST_MODE = False
 
@@ -32,6 +32,7 @@ st.set_page_config(
 # ===============================
 # CORE NOTEBOOK PARSING FUNCTIONS
 # ===============================
+@st.cache_data
 def get_notebook_stats(notebook):
     total_cells = len(notebook.cells)
 
@@ -96,7 +97,7 @@ def extract_outputs(cell):
                 if isinstance(stream_text, list):
                     stream_text = "\n".join(stream_text)
 
-                output_sections.append(str(stream_text))
+                output_sections.append(str(stream_text)[:2000])
 
             elif output.get("output_type") in ["execute_result", "display_data"]:
                 data = output.get("data", {})
@@ -107,7 +108,7 @@ def extract_outputs(cell):
                     if isinstance(text_output, list):
                         text_output = "\n".join(text_output)
 
-                    output_sections.append(str(text_output))
+                    output_sections.append(str(text_output)[:1000])
 
             elif output.get("output_type") == "error":
                 output_sections.append("ERROR:")
@@ -142,6 +143,18 @@ def load_notebook(notebook):
 # =========================
 st.markdown("""
 <style>
+            
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+span[data-testid="stIconMaterial"],
+.material-symbols-rounded,
+.material-icons {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+}
             
 :root {
     --nl-bg: #0b0c0f;
@@ -267,6 +280,8 @@ div[data-testid="stExpander"] summary {
     color: #f5f5f7;
 }
 
+
+
 div[data-testid="stTabs"] button {
     color: #a1a1aa;
     font-weight: 600;
@@ -283,10 +298,22 @@ div[data-testid="stFileUploader"] {
     padding: 16px;
 }
 
+div[data-testid="stFileUploader"]::before {
+    content: "Upload notebook for analysis (Jupyter / Colab .ipynb)";
+    display: block;
+    color: #a1a1aa;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
 div[data-testid="stFileUploader"] section {
     border: 1px dashed rgba(79, 172, 254, 0.28);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.018);
+}
+            
+div[data-testid="stFileUploader"] label span:last-of-type {
+    display: none !important;
 }
 
 .stButton > button {
@@ -466,6 +493,56 @@ div[data-testid="stChatMessage"] pre {
     align-items: center !important;
     justify-content: center !important;
 }
+            
+            
+.landing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 0 0 16px 0;
+}
+
+.landing-feature {
+    background: linear-gradient(145deg, #151821, #0f1117);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.landing-feature-icon {
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.landing-feature-title {
+    color: #f5f5f7;
+    font-size: 15px;
+    font-weight: 650;
+    margin-bottom: 6px;
+}
+
+.landing-feature-desc {
+    color: #a1a1aa;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.landing-who {
+    background: linear-gradient(145deg, rgba(79,172,254,0.06), rgba(79,172,254,0.02));
+    border: 1px solid rgba(79,172,254,0.15);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin: 0 0 32px 0;
+    color: #a1a1aa;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.landing-who b {
+    color: #f5f5f7;
+    font-weight: 600;
+}
+            
 
 .suggestion-buttons .stButton > button:hover {
     border-color: rgba(79, 172, 254, 0.7) !important;
@@ -487,6 +564,20 @@ button[kind="secondary"]:hover {
     color: #f5f5f7 !important;
 }
 
+            
+.footer {
+    color: #73737d;
+    font-size: 12px;
+    text-align: center;
+    padding: 32px 0 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 48px;
+}
+
+.footer a {
+    color: #4facfe;
+    text-decoration: none;
+}
             
 </style>
 """, unsafe_allow_html=True)
@@ -522,15 +613,43 @@ st.markdown("""
     </div>
     <div>
         <div class="app-title">Notebook Lens</div>
-        <div class="app-subtitle">AI-powered reviews for Jupyter and Colab ML notebooks.</div>
+        <div class="app-subtitle">Your notebook deserves an honest code review</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<div class="landing-grid">
+    <div class="landing-feature">
+        <div class="landing-feature-icon">&lt; / &gt;</div>
+        <div class="landing-feature-title">Automatic Notebook Review</div>
+        <div class="landing-feature-desc">Upload any Jupyter or Colab notebook and get a structured ML review in seconds.
+Notebook Lens analyzes your code, training setup, evaluation logic, and workflow automatically..</div>
+    </div>
+    <div class="landing-feature">
+        <div class="landing-feature-icon">⚡</div>
+        <div class="landing-feature-title">Actionable Feedback</div>
+        <div class="landing-feature-desc">No vague AI advice. No giant wall of text. Get the highest priority issues and improvements based on actual notebook evidence..</div>
+    </div>
+    <div class="landing-feature">
+        <div class="landing-feature-icon">💬</div>
+        <div class="landing-feature-title">Chat With Your Notebook</div>
+        <div class="landing-feature-desc">Ask follow up questions about your model, preprocessing, training decisions, or results. Responses stay grounded in your notebook and review context..</div>
+    </div>
+</div>
+<div class="landing-who">
+    <b>Built for:</b> Developers reviewing ML workflows before shipping • Students refining portfolio projects • Kaggle practitioners improving experiments • Bootcamp graduates strengthening notebook quality.
+</div>
+""", unsafe_allow_html=True)
+
+
 uploaded_file = st.file_uploader(
-    "Upload notebook for analysis (Jupyter / Colab .ipynb),", 
-     type=["ipynb"]
-    )
+    "",
+    type=["ipynb"],
+    label_visibility="collapsed"
+)
+
+
 
 def count_keywords(text, keywords):
     return sum(1 for keyword in keywords if keyword in text)
@@ -539,6 +658,7 @@ def count_keywords(text, keywords):
 # ==============================
 # NOTEBOOK TYPE + TASK DETECTION
 # ==============================
+@st.cache_data
 def detect_notebook_focus(notebook_text):
     text = notebook_text.lower()
 
@@ -844,20 +964,10 @@ def detect_notebook_focus(notebook_text):
 
     return "General Notebook"
 
-def score_notebook(notebook_text):
-    # Placeholder for V2 scoring engine
-    scores = {
-        "Code Quality": None,
-        "ML Rigor": None,
-        "Experimentation": None,
-        "Readability": None
-    }
-    return scores
-
-
 # ==============================
 # REPRODUCIBILITY ANALYSIS
 # =============================
+@st.cache_data
 def detect_reproducibility_signals(notebook_text):
     text = notebook_text.lower()
     signals = {
@@ -1033,6 +1143,173 @@ Answer in 3-5 sentences maximum. Be specific. Be honest about uncertainty.
 """
     return prompt
 
+
+# =============================
+        # PROMPT BUILDER (GEMINI INPUT)
+        # =============================
+
+def build_prompt(dynamic_instruction, reproducibility_context, safe_notebook_text):
+    prompt = f"""
+You are a senior Machine Learning engineer and technical reviewer evaluating a Jupyter notebook.
+
+Your goal is to give a helpful, friendly, practical review that is easy to read.
+Be honest about problems, always roast a little bit and don't be boring.
+Avoid generic advice. Tie every single point to something visible in the notebook.
+
+Your job is to:
+- Be precise and technical
+- Avoid vague advice
+- Only comment based on evidence in the notebook
+- If something is unclear or missing, explicitly say: "Not enough information"
+- Reference specific notebook evidence whenever possible
+- Mention specific functions, models, preprocessing steps, metrics, libraries, or outputs seen in the notebook
+- Quote short relevant snippets or behaviors from the notebook when useful
+- Do not make generic ML comments unless supported by notebook evidence
+
+CRITICAL RULES — follow these without exception:
+- Every single point in every section must reference specific code, functions, variable names, or outputs from the notebook. If you cannot tie a point to specific evidence, do not include it.
+- NEVER mention a library, function, metric, or output that is not explicitly visible in the notebook text provided. If unsure whether something exists in the notebook, do not mention it.
+- Do NOT hallucinate missing components.
+- If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
+- Only suggest code that preserves data integrity assumptions.
+- If dataset structure is unclear, first recommend validation or inspection steps before transformations.
+- Do not assume ordering, pairing, or schema correctness unless explicitly shown in the notebook evidence.
+- Be conservative with scores. A notebook with no validation split, no seeds, and no callbacks cannot score above 5 in ML Rigor regardless of other qualities.
+- Do not give high scores unless strong notebook evidence supports them.
+- Avoid inflated scoring.
+
+{dynamic_instruction}
+{reproducibility_context}
+Use the reproducibility signals above to guide your review, but do not overstate them.
+If a signal is marked "Not found", mention it only where relevant and say the notebook does not provide enough evidence.
+Only include rewritten or improved code when it directly helps explain a problem or improvement.
+Place code examples only inside the "Mistakes & Bad Practices" or "Improvements" sections.
+Do NOT generate corrected code in any other section.
+Do NOT rewrite large parts of the notebook unless the notebook evidence clearly supports it.
+
+Return your response in this STRICT format:
+Use the exact section headings shown below. Do not rename headings, because the app uses them to organize the review into tabs:
+
+### Top 3 Priorities
+List exactly 3 most critical things the author should fix or improve first.
+Each priority must name a specific thing from the notebook — a specific function, variable, pattern, or behavior.
+Each priority must be one clear, specific, actionable sentence.
+Number them 1, 2, 3.
+No explanations, no sub-bullets. Just 3 lines.
+BAD example: "Improve your validation strategy."
+GOOD example: "Add a validation_split parameter to model.fit() since no validation data is currently passed."
+Base every priority on actual evidence found in the notebook.
+
+### Project Summary
+Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
+If the goal is unclear, say "Not enough information."
+
+### Evidence Found
+List the most important concrete evidence found in the notebook.
+Mention relevant libraries, functions, models, preprocessing steps, metrics, outputs, or notebook patterns.
+Do not invent evidence.
+
+### What Looks Good
+Mention 2-4 things the notebook does well.
+Tie each point to specific evidence from the notebook.
+
+### Mistakes & Bad Practices
+List the main problems in the notebook.
+For each issue, include:
+- Problem
+- Evidence from the notebook
+- Why it matters
+- How to fix it
+
+Only include issues that are supported by notebook evidence.
+If something is only a risk, label it as a risk, not a confirmed mistake.
+
+### Data & Preprocessing Review
+Review missing values, encoding, scaling, feature selection, data leakage, train/test split, and preprocessing quality.
+Reference actual preprocessing steps, functions, or code patterns found in the notebook.
+If any area is not shown in the notebook, say "Not enough information."
+
+### Model & Training Review
+Review model choice, training approach, evaluation metrics, validation strategy, and whether the chosen metric fits the problem.
+Reference actual models, metrics, callbacks, losses, logs, or evaluation outputs detected in the notebook.
+If no model or training process is visible, say "Not enough information."
+
+### Reproducibility Review
+Review whether the notebook is reproducible and easy to verify.
+Comment on:
+- random seeds
+- train/test split or validation setup
+- callbacks such as EarlyStopping, ModelCheckpoint, or learning-rate scheduling
+- logging or experiment tracking
+- whether results can be rerun reliably
+
+Use only notebook evidence.
+If any item is missing or unclear, say "Not enough information."
+
+### Overfitting / Underfitting Analysis
+Explain any signs or risks of overfitting or underfitting.
+Suggest practical ways to reduce those risks.
+Use notebook evidence such as training logs, validation metrics, learning curves, or output behavior when making conclusions.
+If no training metrics are visible, say "Not enough training metrics found to confidently evaluate overfitting."
+
+### Improvements
+Give clear, prioritized improvements.
+
+Label them as:
+- Quick wins
+- Medium improvements
+- Advanced improvements
+
+For each improvement, explain:
+- what to change specifically — name the function, variable, or section
+- why it improves the notebook
+- where it applies based on notebook evidence
+
+### Notebook Scores
+Give scores from 1-10 for the following areas.
+
+For each score:
+- give the numeric score
+- briefly justify the score using notebook evidence
+
+Categories:
+- Code Quality
+- ML Rigor
+- Experimentation
+- Readability
+
+Scoring Guidelines:
+- 1-3 = weak
+- 4-6 = developing
+- 7-8 = strong
+- 9-10 = exceptional
+
+Scoring Rules:
+- No validation split = ML Rigor cannot exceed 5
+- No random seeds = ML Rigor cannot exceed 6
+- No evaluation metrics = ML Rigor cannot exceed 4
+- Generic or missing comments = Readability cannot exceed 5
+
+### Technical Questions
+Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
+Questions should test the author's reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
+Each question must reference something specific and visible in the notebook.
+Avoid generic ML questions that could apply to any notebook.
+
+### Final Verdict
+Give a short friendly verdict:
+- overall quality
+- biggest strength
+- biggest thing to fix next
+- reliability of the current results
+- readiness level: Beginner / Improving / Solid / Portfolio-ready
+- Briefly summarize how the scores reflect the overall notebook quality and engineering maturity.
+
+Notebook: {safe_notebook_text}
+"""     
+    return prompt
+
+
 # =========================
 # GEMINI API CALL
 # =========================
@@ -1070,16 +1347,6 @@ def extract_section_body(review_text, heading):
 
     return match.group(1).strip()
 
-
-def combine_sections(review_text, headings): #NOT IN USE CURRENTLY
-    sections = []
-    for heading in headings:
-        section = extract_section(review_text, heading)
-        if section:
-            sections.append(section)
-    if not sections:
-        return "_No content found for this tab._"
-    return "\n\n".join(sections)
 
 def render_sections_as_expanders(review_text, headings, first_expanded=True):
     matched_sections = []
@@ -1177,8 +1444,8 @@ def build_pdf_export(output, notebook_name, notebook_focus, stats, size):
         clean_body = re.sub(r"#{1,6}\s*", "", body)
         clean_body = re.sub(r"\*\*(.*?)\*\*", r"\1", clean_body)
         clean_body = re.sub(r"\*(.*?)\*", r"\1", clean_body)
-        clean_body = re.sub(r"`(.*?)`", r"\1", clean_body)
-        clean_body = re.sub(r"```.*?```", "[code block]", clean_body, flags=re.DOTALL)
+        clean_body = re.sub(r"(.*?)", r"\1", clean_body)
+        clean_body = re.sub(r'```.*?```', '[code block]', clean_body, flags=re.DOTALL)
 
         safe_body = clean_body.encode("latin-1", errors="replace").decode("latin-1")
 
@@ -1236,8 +1503,9 @@ def clean_preview_text(text, max_chars=260):
         return "No clear signal found yet."
 
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+
     text = re.sub(r"#+\s*", "", text)
-    text = re.sub(r"[*_`>]", "", text)
+    text = re.sub(r"[*_>]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
 
     intro_patterns = [
@@ -1531,170 +1799,6 @@ Focus heavily on:
 
     if st.button("Analyze Notebook", type="primary"):
         safe_notebook_text = notebook_text[:MAX_CHARS]
-        # =============================
-        # PROMPT BUILDER (GEMINI INPUT)
-        # =============================
-
-        def build_prompt(dynamic_instruction, reproducibility_context, safe_notebook_text):
-            prompt = f"""
-You are a senior Machine Learning engineer and technical reviewer evaluating a Jupyter notebook.
-
-Your goal is to give a helpful, friendly, practical review that is easy to read.
-Be honest about problems, always roast a little bit and don't be boring.
-Avoid generic advice. Tie every single point to something visible in the notebook.
-
-Your job is to:
-- Be precise and technical
-- Avoid vague advice
-- Only comment based on evidence in the notebook
-- If something is unclear or missing, explicitly say: "Not enough information"
-- Reference specific notebook evidence whenever possible
-- Mention specific functions, models, preprocessing steps, metrics, libraries, or outputs seen in the notebook
-- Quote short relevant snippets or behaviors from the notebook when useful
-- Do not make generic ML comments unless supported by notebook evidence
-
-CRITICAL RULES — follow these without exception:
-- Every single point in every section must reference specific code, functions, variable names, or outputs from the notebook. If you cannot tie a point to specific evidence, do not include it.
-- NEVER mention a library, function, metric, or output that is not explicitly visible in the notebook text provided. If unsure whether something exists in the notebook, do not mention it.
-- Do NOT hallucinate missing components.
-- If evidence for a claim is weak or missing, clearly state that the notebook does not provide enough evidence.
-- Only suggest code that preserves data integrity assumptions.
-- If dataset structure is unclear, first recommend validation or inspection steps before transformations.
-- Do not assume ordering, pairing, or schema correctness unless explicitly shown in the notebook evidence.
-- Be conservative with scores. A notebook with no validation split, no seeds, and no callbacks cannot score above 5 in ML Rigor regardless of other qualities.
-- Do not give high scores unless strong notebook evidence supports them.
-- Avoid inflated scoring.
-
-{dynamic_instruction}
-{reproducibility_context}
-Use the reproducibility signals above to guide your review, but do not overstate them.
-If a signal is marked "Not found", mention it only where relevant and say the notebook does not provide enough evidence.
-Only include rewritten or improved code when it directly helps explain a problem or improvement.
-Place code examples only inside the "Mistakes & Bad Practices" or "Improvements" sections.
-Do NOT generate corrected code in any other section.
-Do NOT rewrite large parts of the notebook unless the notebook evidence clearly supports it.
-
-Return your response in this STRICT format:
-Use the exact section headings shown below. Do not rename headings, because the app uses them to organize the review into tabs:
-
-### Top 3 Priorities
-List exactly 3 most critical things the author should fix or improve first.
-Each priority must name a specific thing from the notebook — a specific function, variable, pattern, or behavior.
-Each priority must be one clear, specific, actionable sentence.
-Number them 1, 2, 3.
-No explanations, no sub-bullets. Just 3 lines.
-BAD example: "Improve your validation strategy."
-GOOD example: "Add a validation_split parameter to model.fit() since no validation data is currently passed."
-Base every priority on actual evidence found in the notebook.
-
-### Project Summary
-Briefly explain what the notebook appears to be doing, what ML/data task it seems to address, and what the final output, model, or analysis appears to be.
-If the goal is unclear, say "Not enough information."
-
-### Evidence Found
-List the most important concrete evidence found in the notebook.
-Mention relevant libraries, functions, models, preprocessing steps, metrics, outputs, or notebook patterns.
-Do not invent evidence.
-
-### What Looks Good
-Mention 2-4 things the notebook does well.
-Tie each point to specific evidence from the notebook.
-
-### Mistakes & Bad Practices
-List the main problems in the notebook.
-For each issue, include:
-- Problem
-- Evidence from the notebook
-- Why it matters
-- How to fix it
-
-Only include issues that are supported by notebook evidence.
-If something is only a risk, label it as a risk, not a confirmed mistake.
-
-### Data & Preprocessing Review
-Review missing values, encoding, scaling, feature selection, data leakage, train/test split, and preprocessing quality.
-Reference actual preprocessing steps, functions, or code patterns found in the notebook.
-If any area is not shown in the notebook, say "Not enough information."
-
-### Model & Training Review
-Review model choice, training approach, evaluation metrics, validation strategy, and whether the chosen metric fits the problem.
-Reference actual models, metrics, callbacks, losses, logs, or evaluation outputs detected in the notebook.
-If no model or training process is visible, say "Not enough information."
-
-### Reproducibility Review
-Review whether the notebook is reproducible and easy to verify.
-Comment on:
-- random seeds
-- train/test split or validation setup
-- callbacks such as EarlyStopping, ModelCheckpoint, or learning-rate scheduling
-- logging or experiment tracking
-- whether results can be rerun reliably
-
-Use only notebook evidence.
-If any item is missing or unclear, say "Not enough information."
-
-### Overfitting / Underfitting Analysis
-Explain any signs or risks of overfitting or underfitting.
-Suggest practical ways to reduce those risks.
-Use notebook evidence such as training logs, validation metrics, learning curves, or output behavior when making conclusions.
-If no training metrics are visible, say "Not enough training metrics found to confidently evaluate overfitting."
-
-### Improvements
-Give clear, prioritized improvements.
-
-Label them as:
-- Quick wins
-- Medium improvements
-- Advanced improvements
-
-For each improvement, explain:
-- what to change specifically — name the function, variable, or section
-- why it improves the notebook
-- where it applies based on notebook evidence
-
-### Notebook Scores
-Give scores from 1-10 for the following areas.
-
-For each score:
-- give the numeric score
-- briefly justify the score using notebook evidence
-
-Categories:
-- Code Quality
-- ML Rigor
-- Experimentation
-- Readability
-
-Scoring Guidelines:
-- 1-3 = weak
-- 4-6 = developing
-- 7-8 = strong
-- 9-10 = exceptional
-
-Scoring Rules:
-- No validation split = ML Rigor cannot exceed 5
-- No random seeds = ML Rigor cannot exceed 6
-- No evaluation metrics = ML Rigor cannot exceed 4
-- Generic or missing comments = Readability cannot exceed 5
-
-### Technical Questions
-Generate 5-7 questions that would come up in a professional ML code review or portfolio review.
-Questions should test the author's reasoning about data preprocessing, modeling choices, metrics, validation, limitations, and deployment readiness.
-Each question must reference something specific and visible in the notebook.
-Avoid generic ML questions that could apply to any notebook.
-
-### Final Verdict
-Give a short friendly verdict:
-- overall quality
-- biggest strength
-- biggest thing to fix next
-- reliability of the current results
-- readiness level: Beginner / Improving / Solid / Portfolio-ready
-- Briefly summarize how the scores reflect the overall notebook quality and engineering maturity.
-
-Notebook: {safe_notebook_text}
-"""     
-            return prompt
 
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -2056,3 +2160,10 @@ This notebook shows a solid understanding of CNN basics but needs reproducibilit
                         except Exception as e:
                             log.error(f"Chat error | {type(e).__name__}: {e}")
                             st.error("Something went wrong. Please try again.")
+
+st.markdown("""
+<div class="footer">
+    Notebook Lens · Review. Improve. Iterate faster 
+    <a href="https://github.com/kashan37/notebook-lens" target="_blank">GitHub</a>
+</div>
+""", unsafe_allow_html=True)
