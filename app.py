@@ -19,7 +19,7 @@ log = logging.getLogger("notebook_lens")
 # =========================
 
 client = genai.Client()
-DEBUG_MODE = True
+DEBUG_MODE = False
 TEST_MODE = False  #set False for real model calls
 CHAT_TEST_MODE = False
 
