@@ -20,7 +20,7 @@ log = logging.getLogger("notebook_lens")
 
 client = genai.Client()
 DEBUG_MODE = False
-TEST_MODE = False  #set False for real model calls
+TEST_MODE = False
 CHAT_TEST_MODE = False
 
 st.set_page_config(
@@ -299,7 +299,7 @@ div[data-testid="stFileUploader"] {
 }
 
 div[data-testid="stFileUploader"]::before {
-    content: "Upload notebook for analysis (Jupyter / Colab .ipynb)";
+    content: "Upload your notebook (.ipynb)";
     display: block;
     color: #a1a1aa;
     font-size: 14px;
@@ -402,7 +402,7 @@ div[data-testid="stProgress"] > div > div > div {
 .dashboard-caption {
     color: #9b9b9b;
     font-size: 14px;
-    margin-top: -8px;
+    margin-top: 0;
     margin-bottom: 18px;
 }
             
@@ -435,7 +435,7 @@ div[data-testid="stChatMessageContainer"] {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
+    padding: 0 0 80px 0 !important;
 }
 
 div[data-testid="stChatInput"] textarea {
@@ -1479,7 +1479,7 @@ def render_top_priorities(review_text):
     if not priorities:
         return
 
-    st.markdown("### 🎯 Top 3 Priorities")
+    st.markdown("###  Top 3 Priorities")
     st.markdown(
         '<div class="dashboard-caption">Fix these first. Everything else can wait.</div>',
         unsafe_allow_html=True
@@ -1669,7 +1669,7 @@ if uploaded_file is not None:
     st.markdown("### Notebook Preview")
 
     st.text_area(
-        "Content",
+        "Notebook Content Preview",
         notebook_text[:100000],
         height=400
     )
@@ -1931,7 +1931,7 @@ This notebook shows a solid understanding of CNN basics but needs reproducibilit
 
             )
 
-            st.success("Analysis complete")
+            st.success("Analysis complete.")
             progress_bar.empty()
             status_text.empty()
             st.session_state["review_ready"] = True
@@ -2062,7 +2062,7 @@ This notebook shows a solid understanding of CNN basics but needs reproducibilit
                 unsafe_allow_html=True
             )
         with chat_col2:
-            if st.button("Clear Chat"):
+            if st.button("Clear Chat", type = "secondary"):
                 st.session_state["chat_history"] = []
                 st.rerun()
 
