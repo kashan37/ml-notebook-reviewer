@@ -1,0 +1,4 @@
+DEBUG_MODE = False
+TEST_MODE = False
+CHAT_TEST_MODE = False
+MAX_CHARS = 60000
