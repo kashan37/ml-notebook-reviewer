@@ -22,15 +22,12 @@ The system analyzes:
 * engineering quality
 * notebook structure
 
----
-
 ### Actionable Priorities
 
 Instead of overwhelming users with giant reports, Notebook Lens highlights the most important improvements first.
 
 Focused feedback > 4,000 words of generic critique.
 
----
 
 ### Chat With Your Notebook
 
@@ -73,7 +70,6 @@ Version 2 expands Notebook Lens into a deeper AI engineering system with:
 
 The goal is to move beyond "AI summaries" toward a genuinely useful ML engineering assistant.
 
----
 
 ## Tech Stack
 
@@ -108,7 +104,6 @@ Planned future directions include:
 * better hallucination evaluation
 * deeper training diagnostics
 
----
 
 ## Running Locally
 
@@ -119,7 +114,6 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
----
 
 ## Project Status
 
