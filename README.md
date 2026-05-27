@@ -45,8 +45,6 @@ Examples:
 
 Responses are grounded only in notebook evidence and generated review context.
 
----
-
 ## Current Status
 
 ### V1 Completed
@@ -60,8 +58,6 @@ Version 1 focuses on:
 * notebook type detection
 * export support
 * interactive review dashboard
-
----
 
 ## V2 (In Progress)
 
