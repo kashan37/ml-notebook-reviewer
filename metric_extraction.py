@@ -98,14 +98,13 @@ def _extract_keras_epoch_metrics(output_text: str) -> dict:
     # Anchor: any line with "loss:" in it (Keras always logs loss)
     # re.MULTILINE so ^ and $ match line boundaries
     epoch_metric_blocks = re.findall(
-        r'epoch\s+\d+/\d+\n[^\n]*loss\s*:\s*[\d.]+[^\n]*',
+        r'epoch\s+\d+/\d+\r?\n[^\r\n]*loss\s*:\s*[\d.]+[^\r\n]*',
         output_text,
         re.MULTILINE
     )
 
     if epoch_metric_blocks:
-        # extract only the metric line from each epoch block
-        metric_lines = [block.split('\n')[-1] for block in epoch_metric_blocks]
+        metric_lines = [block.split('\n')[-1].strip('\r') for block in epoch_metric_blocks]
     else:
         # no epoch headers found — fallback to old behavior
         metric_lines = re.findall(

@@ -68,7 +68,7 @@ def extract_outputs(cell):
                 if isinstance(stream_text, list):
                     stream_text = "\n".join(stream_text)
 
-                output_sections.append(str(stream_text)[:2000])
+                output_sections.append(str(stream_text)[:8000])
 
             elif output.get("output_type") in ["execute_result", "display_data"]:
                 data = output.get("data", {})
