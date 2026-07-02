@@ -202,3 +202,162 @@ USER QUESTION:
 Answer in 3-5 sentences maximum. Be specific. Be honest about uncertainty.
 """
     return prompt
+
+
+def build_comparison_prompt(schema: dict) -> str:
+    """
+    Builds the LLM prompt for comparative notebook review.
+    
+    DESIGN PHILOSOPHY:
+    The LLM's only job is to narrate the findings in engineering language. We feed it
+    the structured data explicitly — it cannot invent metrics, flags,
+    or winners that aren't in the schema.
+
+    We tell it the winner, the deltas, the flags, and the structural
+    diff. It explains WHY and WHAT IT MEANS. Nothing more.
+    """
+
+    nb_a = schema["notebook_a"]
+    nb_b = schema["notebook_b"]
+    result = schema["comparison_result"]
+    deltas = result["metric_deltas"]
+    diff   = result["structural_diff"]
+    flags  = result["risk_flags"]
+
+    comparison_type = schema.get("comparison_type", "notebook_vs_notebook")
+    type_label = "two training runs of the same notebook" \
+        if comparison_type == "run_vs_run" \
+        else "two different notebooks"
+
+    # --- Format metrics for readability ---
+    def fmt_metric(value, is_percentage=True):
+        if value is None:
+            return "not found in outputs"
+        if is_percentage:
+            return f"{value:.2%}"
+        return f"{value:.4f}"
+
+    def fmt_delta(value, higher_is_better=True):
+        if value is None:
+            return "not comparable (one or both notebooks missing this metric)"
+        direction = "B better" if (value > 0) == higher_is_better else "A better"
+        return f"{value:+.4f} ({direction})"
+
+    # --- Build metrics block ---
+    metrics_block = f"""
+NOTEBOOK A — {nb_a['filename']}
+  Focus:          {nb_a['focus']}
+  Accuracy:       {fmt_metric(nb_a['extracted_metrics']['accuracy'])}
+  Val Accuracy:   {fmt_metric(nb_a['extracted_metrics']['val_accuracy'])}
+  Loss:           {fmt_metric(nb_a['extracted_metrics']['loss'], False)}
+  Val Loss:       {fmt_metric(nb_a['extracted_metrics']['val_loss'], False)}
+  F1:             {fmt_metric(nb_a['extracted_metrics']['f1'])}
+  Epochs:         {nb_a['extracted_metrics']['epochs_trained'] or 'not found'}
+  Batch Size:     {nb_a['extracted_metrics']['batch_size'] or 'not found'}
+  Learning Rate:  {nb_a['extracted_metrics']['learning_rate'] or 'not found'}
+  Optimizer:      {nb_a['structural_features']['optimizer'] or 'not found'}
+  Loss Function:  {nb_a['structural_features']['loss_function'] or 'not found'}
+  Early Stopping: {'Yes' if nb_a['structural_features']['has_early_stopping'] else 'No'}
+  Val Split:      {'Yes' if nb_a['structural_features']['has_validation_split'] else 'No'}
+  Random Seeds:   {'Yes' if nb_a['reproducibility']['random_seeds'] else 'No'}
+
+NOTEBOOK B — {nb_b['filename']}
+  Focus:          {nb_b['focus']}
+  Accuracy:       {fmt_metric(nb_b['extracted_metrics']['accuracy'])}
+  Val Accuracy:   {fmt_metric(nb_b['extracted_metrics']['val_accuracy'])}
+  Loss:           {fmt_metric(nb_b['extracted_metrics']['loss'], False)}
+  Val Loss:       {fmt_metric(nb_b['extracted_metrics']['val_loss'], False)}
+  F1:             {fmt_metric(nb_b['extracted_metrics']['f1'])}
+  Epochs:         {nb_b['extracted_metrics']['epochs_trained'] or 'not found'}
+  Batch Size:     {nb_b['extracted_metrics']['batch_size'] or 'not found'}
+  Learning Rate:  {nb_b['extracted_metrics']['learning_rate'] or 'not found'}
+  Optimizer:      {nb_b['structural_features']['optimizer'] or 'not found'}
+  Loss Function:  {nb_b['structural_features']['loss_function'] or 'not found'}
+  Early Stopping: {'Yes' if nb_b['structural_features']['has_early_stopping'] else 'No'}
+  Val Split:      {'Yes' if nb_b['structural_features']['has_validation_split'] else 'No'}
+  Random Seeds:   {'Yes' if nb_b['reproducibility']['random_seeds'] else 'No'}"""
+
+    # --- Build deltas block ---
+    deltas_block = f"""
+METRIC DELTAS (B minus A):
+  Accuracy Delta:     {fmt_delta(deltas['accuracy_delta'])}
+  Val Accuracy Delta: {fmt_delta(deltas['val_accuracy_delta'])}
+  Loss Delta:         {fmt_delta(deltas['loss_delta'], higher_is_better=False)}
+  Val Loss Delta:     {fmt_delta(deltas['val_loss_delta'], higher_is_better=False)}
+  F1 Delta:           {fmt_delta(deltas['f1_delta'])}"""
+
+    # --- Build scoring block ---
+    winner = result['winner'] or 'undetermined'
+    confidence = result['confidence'] or 'undetermined'
+
+    scoring_block = f"""
+SCORING ENGINE RESULT:
+  Winner:     {winner}
+  Confidence: {confidence}"""
+
+    # --- Build structural diff block ---
+    arch_overlap = ', '.join(diff['architecture_overlap']) or 'none'
+    config_diffs = '\n  '.join(diff['config_differences']) or 'none detected'
+    repro_gaps   = '\n  '.join(diff['reproducibility_gaps']) or 'none detected'
+
+    diff_block = f"""
+STRUCTURAL COMPARISON:
+  Same Focus:            {'Yes' if diff['same_focus'] else 'No'}
+  Architecture Overlap:  {arch_overlap}
+  Config Differences:
+  {config_diffs}
+  Reproducibility Gaps:
+  {repro_gaps}"""
+
+    # --- Build risk flags block ---
+    if flags:
+        flags_block = "RISK FLAGS DETECTED:\n" + \
+            "\n".join(f"  - {f}" for f in flags)
+    else:
+        flags_block = "RISK FLAGS DETECTED:\n  None"
+
+    # --- Assemble full prompt ---
+    prompt = f"""You are a senior ML engineer reviewing {type_label}.
+You have been given pre-computed structured analysis from a deterministic scoring engine.
+Your job is to narrate these findings as an experienced engineer would — specific, grounded, direct.
+
+STRICT RULES:
+1. Only reference metrics explicitly provided below. Never invent or estimate values not shown.
+2. If a metric says "not found in outputs", do not mention it in your review.
+3. Do not repeat the raw numbers mechanically — interpret what they mean.
+4. Every claim must be grounded in the structured data below.
+5. Be direct. No filler phrases like "it's worth noting" or "it's important to mention".
+6. Maximum 400 words total.
+
+---
+{metrics_block}
+{deltas_block}
+{scoring_block}
+{diff_block}
+{flags_block}
+---
+
+Write your comparative review using EXACTLY this structure. 
+Do not add extra sections or skip any section.
+
+## Overall Verdict
+[1-2 sentences. State which notebook performed better and by how much, 
+or explain why the comparison is inconclusive. Reference the confidence level.]
+
+## What Changed Between A and B
+[2-3 sentences. Reference specific config differences and structural changes. 
+If run_vs_run, focus on what was tweaked between runs.]
+
+## Generalization Analysis
+[2-3 sentences. Use val_loss and val_accuracy to assess generalization.
+If overfitting risk flags exist, explain what they suggest.]
+
+## Risk Assessment
+[1 sentence per risk flag found. If no flags, write "No significant risks detected."
+Do not invent risks beyond what is listed in the flags above.]
+
+## Recommendation
+[2-3 sentences. What should the author do next? Be specific — 
+reference actual values, config fields, and flag names from the data above.]"""
+
+    return prompt

@@ -314,58 +314,51 @@ def detect_notebook_focus(notebook_text):
     return "General Notebook"
 
 
+
+def detect_reproducibility_dict(notebook_text):
+    """
+    Returns raw boolean dict of reproducibility signals.
+    Used by comparison engine — needs booleans, not formatted strings.
+    """
+    text = notebook_text.lower()
+    return {
+        "random_seeds": any(keyword in text for keyword in [
+            "random_state", "np.random.seed", "random.seed",
+            "torch.manual_seed", "tf.random.set_seed", "seed="
+        ]),
+        "train_test_split": any(keyword in text for keyword in [
+            "train_test_split", "validation_split", "stratifiedkfold",
+            "kfold", "cross_val_score", "train_df", "test_df",
+            "x_train", "x_test", "y_train", "y_test"
+        ]),
+        "callbacks": any(keyword in text for keyword in [
+            "earlystopping", "modelcheckpoint", "reducelronplateau",
+            "tensorboard", "callbacks"
+        ]),
+        "logging": any(keyword in text for keyword in [
+            "mlflow", "wandb", "tensorboard", "comet", "neptune",
+            "history.history", "training log", "logs"
+        ])
+    }
+
 # ==============================
 # REPRODUCIBILITY ANALYSIS
 # =============================
 @st.cache_data
 def detect_reproducibility_signals(notebook_text):
-    text = notebook_text.lower()
-    signals = {
-        "Random seeds": any(keyword in text for keyword in [
-            "random_state",
-            "np.random.seed",
-            "random.seed",
-            "torch.manual_seed",
-            "tf.random.set_seed",
-            "seed="
-        ]),
-        "Train/test split": any(keyword in text for keyword in [
-            "train_test_split",
-            "validation_split",
-            "stratifiedkfold",
-            "kfold",
-            "cross_val_score",
-            "train_df",
-            "test_df",
-            "x_train",
-            "x_test",
-            "y_train",
-            "y_test"
-        ]),
-        "Callbacks": any(keyword in text for keyword in [
-            "earlystopping",
-            "modelcheckpoint",
-            "reducelronplateau",
-            "tensorboard",
-            "callbacks"
-        ]),
-        "Logging / experiment tracking": any(keyword in text for keyword in [
-            "mlflow",
-            "wandb",
-            "tensorboard",
-            "comet",
-            "neptune",
-            "history.history",
-            "training log",
-            "logs"
-        ])
+    signals_dict = detect_reproducibility_dict(notebook_text)
+
+    label_map = {
+        "random_seeds": "Random seeds",
+        "train_test_split": "Train/test split",
+        "callbacks": "Callbacks",
+        "logging": "Logging / experiment tracking",
     }
 
     result = ["Reproducibility signals detected in the notebook:"]
-
-    for name, found in signals.items():
-        status = "Found" if found else "Not found"
-        result.append(f"- {name}: {status}")
+    for key, label in label_map.items():
+        status = "Found" if signals_dict[key] else "Not found"
+        result.append(f"- {label}: {status}")
 
     return "\n".join(result)
 
