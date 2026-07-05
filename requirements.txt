@@ -3,3 +3,4 @@ nbformat
 google-generativeai
 google-genai
 fpdf2
+plotly

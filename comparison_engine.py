@@ -13,6 +13,10 @@ log = logging.getLogger("notebook_lens")
 
 from prompts import build_comparison_prompt
 from metric_extraction import extract_metrics_from_notebook
+from loss_curve_extractor import extract_loss_curves
+from overfitting_detector import detect_overfitting
+from training_risk_analyzer import analyze_training_risks
+from training_summary import generate_training_summary
 
 from comparison_schema import (
     ComparisonSchema,
@@ -37,7 +41,7 @@ from detection import detect_notebook_focus, detect_reproducibility_dict
 #  STRUCTURAL DIFF
 # ==============================
 
-def build_notebook_snapshot(notebook, uploaded_file, notebook_text: str) -> NotebookSnapshot:
+def build_notebook_snapshot(notebook, uploaded_file, notebook_text: str, gemini_call_fn=None) -> NotebookSnapshot:
     """
     Single entry point that produces a complete NotebookSnapshot.
     Reuses all existing V1 functions.
@@ -63,6 +67,10 @@ def build_notebook_snapshot(notebook, uploaded_file, notebook_text: str) -> Note
     snapshot["extracted_metrics"] = extract_metrics_from_notebook(notebook_text)
     #structural extractor
     snapshot["structural_features"] = extract_structural_features(notebook_text)
+    snapshot["loss_curve"]          = extract_loss_curves(notebook_text)  
+    snapshot["overfitting_score"] = detect_overfitting(snapshot["loss_curve"])
+    snapshot["training_risks"]    = analyze_training_risks(snapshot)
+    snapshot["training_summary"]  = ( generate_training_summary( snapshot, gemini_call_fn) if gemini_call_fn is not None else None)
 
     return snapshot
 
@@ -528,8 +536,8 @@ def run_comparison(
     schema = create_comparison(comparison_type)
 
     # Step 1 — Build snapshots
-    schema["notebook_a"] = build_notebook_snapshot(notebook_a, file_a, text_a)
-    schema["notebook_b"] = build_notebook_snapshot(notebook_b, file_b, text_b)
+    schema["notebook_a"] = build_notebook_snapshot(notebook_a, file_a, text_a, gemini_call_fn)
+    schema["notebook_b"] = build_notebook_snapshot(notebook_b, file_b, text_b, gemini_call_fn)
 
     # Step 2 — Structural diff
     schema["comparison_result"]["structural_diff"] = build_structural_diff(

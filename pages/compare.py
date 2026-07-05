@@ -2,6 +2,7 @@ import streamlit as st
 import nbformat
 from google.genai import errors
 import logging
+import plotly.graph_objects as go
 
 from styles import inject_styles
 from gemini_service import call_gemini
@@ -9,6 +10,201 @@ from comparison_engine import run_comparison
 from notebook_utils import load_notebook, validate_notebook_content
 
 log = logging.getLogger("notebook_lens")
+
+
+def render_loss_curve(loss_curve: dict, title: str):
+    """
+    Renders an interactive Plotly loss curve chart.
+    Dark themed to match the app. Shows train and val curves
+    on the same chart if both exist.
+    Returns early with a caption if no curve data exists.
+    """
+    if loss_curve is None or loss_curve["total_epochs_found"] == 0:
+        st.caption("No epoch-level training data found for this notebook.")
+        return
+
+    epochs    = [e["epoch"] for e in loss_curve["epochs"]]
+    train_loss = [e["loss"] for e in loss_curve["epochs"]]
+    val_loss   = [e["val_loss"] for e in loss_curve["epochs"]]
+    train_acc  = [e["accuracy"] for e in loss_curve["epochs"]]
+    val_acc    = [e["val_accuracy"] for e in loss_curve["epochs"]]
+
+    # Only plot series that actually have data
+    has_train_loss = any(v is not None for v in train_loss)
+    has_val_loss   = any(v is not None for v in val_loss)
+    has_train_acc  = any(v is not None for v in train_acc)
+    has_val_acc    = any(v is not None for v in val_acc)
+
+    if not has_train_loss and not has_val_loss:
+        st.caption("No loss values found in training history.")
+        return
+
+    fig = go.Figure()
+
+    # --- Loss curves ---
+    if has_train_loss:
+        fig.add_trace(go.Scatter(
+            x=epochs,
+            y=train_loss,
+            mode="lines+markers",
+            name="Train Loss",
+            line=dict(color="#4facfe", width=2),
+            marker=dict(size=4),
+            connectgaps=True,
+        ))
+
+    if has_val_loss:
+        fig.add_trace(go.Scatter(
+            x=epochs,
+            y=val_loss,
+            mode="lines+markers",
+            name="Val Loss",
+            line=dict(color="#e05c5c", width=2, dash="dash"),
+            marker=dict(size=4),
+            connectgaps=True,
+        ))
+
+    # --- Accuracy curves on secondary y-axis ---
+    if has_train_acc:
+        fig.add_trace(go.Scatter(
+            x=epochs,
+            y=train_acc,
+            mode="lines+markers",
+            name="Train Accuracy",
+            line=dict(color="#76b900", width=2),
+            marker=dict(size=4),
+            yaxis="y2",
+            connectgaps=True,
+        ))
+
+    if has_val_acc:
+        fig.add_trace(go.Scatter(
+            x=epochs,
+            y=val_acc,
+            mode="lines+markers",
+            name="Val Accuracy",
+            line=dict(color="#f0a500", width=2, dash="dash"),
+            marker=dict(size=4),
+            yaxis="y2",
+            connectgaps=True,
+        ))
+
+    fig.update_layout(
+        title=dict(text=title, font=dict(color="#f5f5f7", size=14)),
+        paper_bgcolor="#111318",
+        plot_bgcolor="#111318",
+        font=dict(color="#a0a0b0", family="Inter"),
+        xaxis=dict(
+            title="Epoch",
+            gridcolor="#2a2d3a",
+            zerolinecolor="#2a2d3a",
+        ),
+        yaxis=dict(
+            title="Loss",
+            gridcolor="#2a2d3a",
+            zerolinecolor="#2a2d3a",
+            side="left",
+        ),
+        yaxis2=dict(
+            title="Accuracy",
+            overlaying="y",
+            side="right",
+            gridcolor="#2a2d3a",
+            zerolinecolor="#2a2d3a",
+            range=[0, 1],
+        ),
+        legend=dict(
+            bgcolor="#111318",
+            bordercolor="#2a2d3a",
+            borderwidth=1,
+            font=dict(color="#a0a0b0"),
+        ),
+        margin=dict(l=40, r=40, t=40, b=40),
+        height=320,
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_overfitting_score(overfit: dict):
+    """
+    Renders overfitting score card with risk level and evidence.
+    """
+    if overfit is None or overfit["score"] is None:
+        st.caption("Not enough epoch data to assess overfitting.")
+        return
+
+    score     = overfit["score"]
+    risk      = overfit["risk_level"]
+    evidence  = overfit["evidence"]
+
+    risk_color = {
+        "low":      "#76b900",
+        "moderate": "#f0a500",
+        "high":     "#e05c5c",
+    }.get(risk, "#666")
+
+    st.markdown(f"""
+    <div style="
+        background: #111318;
+        border: 1px solid #2a2d3a;
+        border-left: 4px solid {risk_color};
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 1rem;
+    ">
+        <div style="font-size:13px; color:#a0a0b0; 
+                    text-transform:uppercase; letter-spacing:0.06em;
+                    font-weight:600; margin-bottom:6px;">
+            Overfitting Risk
+        </div>
+        <div style="font-size:24px; font-weight:700; color:{risk_color};">
+            {score}/100 — {risk.title()}
+        </div>
+        <div style="margin-top:10px;">
+            {''.join(f'<div style="font-size:12px; color:#a0a0b0; margin-top:4px;">· {e}</div>' 
+                     for e in evidence)}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_training_risks(risks: list):
+    """
+    Renders training risk flags with severity icons.
+    Warnings first, then info.
+    """
+    if not risks:
+        st.caption("No training configuration risks detected.")
+        return
+
+    warnings = [r for r in risks if r["severity"] == "warning"]
+    infos    = [r for r in risks if r["severity"] == "info"]
+
+    for r in warnings:
+        st.markdown(f"""
+        <div style="
+            background: #1a1008;
+            border-left: 4px solid #e05c5c;
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #f5f5f7;
+        ">⚠️ <b>[{r['category']}]</b> {r['message']}</div>
+        """, unsafe_allow_html=True)
+
+    for r in infos:
+        st.markdown(f"""
+        <div style="
+            background: #0f1420;
+            border-left: 4px solid #4facfe;
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #f5f5f7;
+        ">ℹ️ <b>[{r['category']}]</b> {r['message']}</div>
+        """, unsafe_allow_html=True)
 
 st.set_page_config(
     page_title="Compare Notebooks — Notebook Lens",
@@ -175,7 +371,7 @@ if file_a and file_b:
                 notebook_a, file_a, text_a,
                 notebook_b, file_b, text_b,
                 comparison_type=comparison_type,
-                gemini_call_fn=call_gemini
+                gemini_call_fn= call_gemini  #### for no gemini call
             )
 
             progress_bar.progress(100)
@@ -413,6 +609,59 @@ if st.session_state.get("comparison_ready") and st.session_state.get("comparison
             st.markdown(llm_review)
     else:
         st.caption("LLM review not available.")
+
+    # =========================
+    # PER NOTEBOOK ANALYSIS. Loss curves, overfitting, risks, summaries
+    # =========================
+    st.markdown("---")
+    st.markdown("#### Per-Notebook Analysis")
+    st.markdown(
+        '<div class="dashboard-caption">Loss curves, overfitting assessment, '
+        'and training configuration risks for each notebook.</div>',
+        unsafe_allow_html=True
+    )
+
+    tab_a, tab_b = st.tabs([
+        f"Notebook A — {nb_a['filename']}",
+        f"Notebook B — {nb_b['filename']}",
+    ])
+
+    with tab_a:
+        st.markdown("**Loss Curves**")
+        render_loss_curve(nb_a.get("loss_curve"), "Notebook A — Training History")
+
+        st.markdown("**Overfitting Assessment**")
+        render_overfitting_score(nb_a.get("overfitting_score"))
+
+        st.markdown("**Training Configuration Risks**")
+        render_training_risks(nb_a.get("training_risks", []))
+
+        st.markdown("**Training Summary**")
+        summary_a = nb_a.get("training_summary")
+        if summary_a:
+            with st.expander("View training summary", expanded=False):
+                st.markdown(summary_a)
+        else:
+            st.caption("Training summary not available.")
+
+    with tab_b:
+        st.markdown("**Loss Curves**")
+        render_loss_curve(nb_b.get("loss_curve"), "Notebook B — Training History")
+
+        st.markdown("**Overfitting Assessment**")
+        render_overfitting_score(nb_b.get("overfitting_score"))
+
+        st.markdown("**Training Configuration Risks**")
+        render_training_risks(nb_b.get("training_risks", []))
+
+        st.markdown("**Training Summary**")
+        summary_b = nb_b.get("training_summary")
+        if summary_b:
+            with st.expander("View training summary", expanded=False):
+                st.markdown(summary_b)
+        else:
+            st.caption("Training summary not available.")
+
 
     # =========================
     # FOOTER

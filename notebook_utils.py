@@ -79,7 +79,7 @@ def extract_outputs(cell):
                     if isinstance(text_output, list):
                         text_output = "\n".join(text_output)
 
-                    output_sections.append(str(text_output)[:1000])
+                    output_sections.append(str(text_output)[:8000])   #was 1000
 
             elif output.get("output_type") == "error":
                 output_sections.append("ERROR:")

@@ -4,6 +4,52 @@ from datetime import datetime
 
 
 # ==============================
+# W2D1— VISSUALIZATION INTELLIGENCE
+# ==============================
+
+class EpochMetrics(TypedDict):
+    """Single epoch's metrics — building block for loss curves."""
+    epoch: int
+    loss: Optional[float]
+    val_loss: Optional[float]
+    accuracy: Optional[float]
+    val_accuracy: Optional[float]
+
+
+class LossCurveData(TypedDict):
+    """
+    Full training history extracted from output cells.
+    Week 1 only grabbed the LAST epoch. Week 2 grabs ALL of them.
+    This is what powers the loss curve chart.
+    """
+    epochs: List[EpochMetrics]          # one entry per epoch
+    total_epochs_found: int             # how many epochs we actually extracted
+    has_validation_curves: bool         # did we find val_loss / val_accuracy
+
+
+class OverfittingScore(TypedDict):
+    """
+    Heuristic-based overfitting assessment.
+    Score is 0-100. Higher = more likely overfitting.
+    Never claim certainty — these are signals not verdicts.
+    """
+    score: Optional[int]                # 0-100, None if not enough data
+    risk_level: Optional[str]           # "low" | "moderate" | "high" | None
+    widening_gap_detected: bool         # val_loss diverging from train_loss
+    unstable_validation_detected: bool  # val_loss oscillating
+    memorization_detected: bool         # train acc >> val acc consistently
+    evidence: List[str]                 # human readable list of what triggered it
+
+
+class TrainingRiskFlag(TypedDict):
+    """Single training configuration risk finding."""
+    severity: str                       # "warning" | "info"
+    message: str                        # human readable, phrased as potential risk
+    category: str                       # "epochs" | "batch_size" | "callbacks" | etc
+
+
+
+# ==============================
 # NOTEBOOK SNAPSHOT STRUCTURE
 # ==============================
 
@@ -43,10 +89,15 @@ class NotebookSnapshot(TypedDict):
     focus: str
     char_count: int
     file_size_kb: float
-    stats: dict                        # reuses existing get_notebook_stats() output
+    stats: dict
     reproducibility: ReproducibilitySnapshot
     extracted_metrics: ExtractedMetrics
     structural_features: StructuralFeatures
+    # --- Week 2 additions ---
+    loss_curve: Optional[LossCurveData]
+    overfitting_score: Optional[OverfittingScore]
+    training_risks: List[TrainingRiskFlag]
+    training_summary: Optional[str]
 
 
 # ==============================
@@ -141,6 +192,11 @@ def empty_snapshot(filename: str = "") -> NotebookSnapshot:
         "reproducibility": empty_reproducibility(),
         "extracted_metrics": empty_metrics(),
         "structural_features": empty_structural_features(),
+        #  W2 
+        "loss_curve": None,
+        "overfitting_score": None,
+        "training_risks": [],
+        "training_summary": None,
     }
 
 
